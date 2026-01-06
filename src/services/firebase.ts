@@ -507,3 +507,62 @@ export async function getPlayerRanks(weekName: PlayoffWeekName): Promise<Map<str
     return new Map();
   }
 }
+
+// ============================================
+// Scoring Rules functions
+// ============================================
+
+import type { ScoringRules } from './scoring';
+import { PPR_SCORING } from './scoring';
+
+// Save scoring rules to Firebase
+export async function saveScoringRules(rules: ScoringRules): Promise<boolean> {
+  try {
+    const rulesRef = doc(db, 'config', 'scoringRules');
+    await setDoc(rulesRef, {
+      ...rules,
+      updatedAt: new Date(),
+    });
+    console.log('Saved scoring rules to Firebase');
+    return true;
+  } catch (error) {
+    console.error('Error saving scoring rules:', error);
+    return false;
+  }
+}
+
+// Get scoring rules from Firebase (falls back to default PPR if not set)
+export async function getScoringRules(): Promise<ScoringRules> {
+  try {
+    const rulesRef = doc(db, 'config', 'scoringRules');
+    const rulesSnap = await getDoc(rulesRef);
+
+    if (rulesSnap.exists()) {
+      const data = rulesSnap.data();
+      // Remove updatedAt field and return the rest as ScoringRules
+      const { updatedAt, ...rules } = data;
+      return rules as ScoringRules;
+    }
+    // Return default PPR scoring if not configured
+    return PPR_SCORING;
+  } catch (error) {
+    console.error('Error getting scoring rules:', error);
+    return PPR_SCORING;
+  }
+}
+
+// Subscribe to scoring rules changes (real-time)
+export function subscribeToScoringRules(
+  callback: (rules: ScoringRules) => void
+): () => void {
+  const rulesRef = doc(db, 'config', 'scoringRules');
+  return onSnapshot(rulesRef, (doc) => {
+    if (doc.exists()) {
+      const data = doc.data();
+      const { updatedAt, ...rules } = data;
+      callback(rules as ScoringRules);
+    } else {
+      callback(PPR_SCORING);
+    }
+  });
+}

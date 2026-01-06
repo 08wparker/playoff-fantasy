@@ -10,6 +10,7 @@ import { RosterBuilder } from './components/roster/RosterBuilder';
 import { Scoreboard } from './components/scoring/Scoreboard';
 import { AdminSync } from './components/admin/AdminSync';
 import { AdminStats } from './components/admin/AdminStats';
+import { AdminScoringRules } from './components/admin/AdminScoringRules';
 
 // Admin email addresses
 const ADMIN_EMAILS = ['williamfparker@gmail.com'];
@@ -86,6 +87,7 @@ function AppContent() {
         />
       ) : (
         <div className="space-y-6">
+          <AdminScoringRules />
           <AdminStats />
           <AdminSync />
         </div>

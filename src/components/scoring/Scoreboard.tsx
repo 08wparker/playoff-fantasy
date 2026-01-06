@@ -92,7 +92,7 @@ export function Scoreboard({
           if (!player) continue;
 
           const stats = statsMap.get(slot.id) || null;
-          const points = stats ? calculatePoints(stats) : 0;
+          const points = stats ? calculatePoints(stats, undefined, player.position) : 0;
 
           playerScores.push({ player, stats, points });
           totalPoints += points;
@@ -276,6 +276,67 @@ function OverallStandings({
   );
 }
 
+// Stats display component for player breakdown
+function PlayerStatsDisplay({ stats, position }: { stats: PlayerStats; position: string }) {
+  const statItems: { label: string; value: string }[] = [];
+
+  // QB stats
+  if (position === 'QB') {
+    if (stats.passingYards > 0) statItems.push({ label: 'Pass Yds', value: `${stats.passingYards}` });
+    if (stats.passingTDs > 0) statItems.push({ label: 'Pass TD', value: `${stats.passingTDs}` });
+    if (stats.interceptions > 0) statItems.push({ label: 'INT', value: `${stats.interceptions}` });
+    if (stats.rushingYards > 0) statItems.push({ label: 'Rush Yds', value: `${stats.rushingYards}` });
+    if (stats.rushingTDs > 0) statItems.push({ label: 'Rush TD', value: `${stats.rushingTDs}` });
+  }
+  // RB stats
+  else if (position === 'RB') {
+    if (stats.rushingYards > 0) statItems.push({ label: 'Rush Yds', value: `${stats.rushingYards}` });
+    if (stats.rushingTDs > 0) statItems.push({ label: 'Rush TD', value: `${stats.rushingTDs}` });
+    if (stats.receptions > 0) statItems.push({ label: 'Rec', value: `${stats.receptions}` });
+    if (stats.receivingYards > 0) statItems.push({ label: 'Rec Yds', value: `${stats.receivingYards}` });
+    if (stats.receivingTDs > 0) statItems.push({ label: 'Rec TD', value: `${stats.receivingTDs}` });
+  }
+  // WR/TE stats
+  else if (position === 'WR' || position === 'TE') {
+    if (stats.receptions > 0) statItems.push({ label: 'Rec', value: `${stats.receptions}` });
+    if (stats.receivingYards > 0) statItems.push({ label: 'Rec Yds', value: `${stats.receivingYards}` });
+    if (stats.receivingTDs > 0) statItems.push({ label: 'Rec TD', value: `${stats.receivingTDs}` });
+    if (stats.rushingYards > 0) statItems.push({ label: 'Rush Yds', value: `${stats.rushingYards}` });
+    if (stats.rushingTDs > 0) statItems.push({ label: 'Rush TD', value: `${stats.rushingTDs}` });
+  }
+  // K stats
+  else if (position === 'K') {
+    if (stats.fg0_39 > 0) statItems.push({ label: 'FG 0-39', value: `${stats.fg0_39}` });
+    if (stats.fg40_49 > 0) statItems.push({ label: 'FG 40-49', value: `${stats.fg40_49}` });
+    if (stats.fg50Plus > 0) statItems.push({ label: 'FG 50+', value: `${stats.fg50Plus}` });
+    if (stats.fgMissed > 0) statItems.push({ label: 'FG Miss', value: `${stats.fgMissed}` });
+    if (stats.xpMade > 0) statItems.push({ label: 'XP', value: `${stats.xpMade}` });
+    if (stats.xpMissed > 0) statItems.push({ label: 'XP Miss', value: `${stats.xpMissed}` });
+  }
+  // D/ST stats
+  else if (position === 'D/ST') {
+    statItems.push({ label: 'Pts Allowed', value: `${stats.pointsAllowed}` });
+    if (stats.sacks > 0) statItems.push({ label: 'Sacks', value: `${stats.sacks}` });
+    if (stats.defensiveInterceptions > 0) statItems.push({ label: 'INT', value: `${stats.defensiveInterceptions}` });
+    if (stats.fumbleRecoveries > 0) statItems.push({ label: 'Fum Rec', value: `${stats.fumbleRecoveries}` });
+    if (stats.defensiveTDs > 0) statItems.push({ label: 'Def TD', value: `${stats.defensiveTDs}` });
+  }
+
+  if (statItems.length === 0) {
+    return <p className="text-xs text-gray-400">No stats recorded</p>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1">
+      {statItems.map((item) => (
+        <span key={item.label} className="text-xs text-gray-600">
+          <span className="text-gray-400">{item.label}:</span> {item.value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // Week-specific standings with expandable roster view
 function WeekStandings({
   weekName,
@@ -375,26 +436,34 @@ function WeekStandings({
                   {entry.playerScores.map((ps) => (
                     <div
                       key={ps.player.id}
-                      className="flex items-center justify-between py-2 px-3 bg-white rounded border border-gray-100"
+                      className="py-2 px-3 bg-white rounded border border-gray-100"
                     >
-                      <div className="flex items-center gap-3">
-                        {ps.player.imageUrl ? (
-                          <img src={ps.player.imageUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">
-                            {ps.player.position}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {ps.player.imageUrl ? (
+                            <img src={ps.player.imageUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">
+                              {ps.player.position}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium text-sm text-gray-900">{ps.player.name}</p>
+                            <p className="text-xs text-gray-500">{ps.player.position} - {ps.player.team}</p>
                           </div>
-                        )}
-                        <div>
-                          <p className="font-medium text-sm text-gray-900">{ps.player.name}</p>
-                          <p className="text-xs text-gray-500">{ps.player.position} - {ps.player.team}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-bold ${ps.points > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {formatPoints(ps.points)}
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`font-bold ${ps.points > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {formatPoints(ps.points)}
-                        </p>
-                      </div>
+                      {/* Stats breakdown */}
+                      {ps.stats && ps.points > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <PlayerStatsDisplay stats={ps.stats} position={ps.player.position} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

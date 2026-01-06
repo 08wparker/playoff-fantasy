@@ -58,9 +58,14 @@ export interface PlayerStats {
   receptions: number;
   receivingYards: number;
   receivingTDs: number;
-  // Kicking
-  fieldGoals: number;
-  extraPoints: number;
+  // Kicking - Field Goals by distance
+  fg0_39: number;      // FGs made from 0-39 yards
+  fg40_49: number;     // FGs made from 40-49 yards
+  fg50Plus: number;    // FGs made from 50+ yards
+  fgMissed: number;    // Missed/blocked FGs
+  // Kicking - Extra Points
+  xpMade: number;      // Extra points made
+  xpMissed: number;    // Extra points missed
   // Defense
   pointsAllowed: number;
   sacks: number;

@@ -3,6 +3,7 @@ import type { Player, Position, RosterSlot, WeeklyRoster } from '../../types';
 import { ROSTER_SLOTS } from '../../types';
 import { PositionSlot } from './PositionSlot';
 import { AvailablePlayers } from './AvailablePlayers';
+import { ScoringRubric } from './ScoringRubric';
 import { isRosterLocked, getTimeUntilLock } from '../../data/players';
 
 interface RosterBuilderProps {
@@ -160,13 +161,15 @@ export function RosterBuilder({
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
         <h3 className="font-semibold text-gray-800 mb-2">Rules</h3>
         <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Standard PPR scoring (1 point per reception)</li>
           <li>• Roster: 1 QB, 2 RB, 3 WR, 1 TE, 1 D/ST, 1 K</li>
           <li>• Each player can only be used <strong>once</strong> during the entire playoffs</li>
           <li>• Rosters lock automatically at the deadline each week</li>
           <li>• Most total points at the end of the playoffs wins!</li>
         </ul>
       </div>
+
+      {/* Scoring Rubric */}
+      <ScoringRubric />
 
       {/* Player Selection Modal */}
       {selectingSlot && (

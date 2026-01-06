@@ -97,7 +97,7 @@ export function useScoring(
         if (!player) continue;
 
         const stats = playerStats.get(playerId);
-        const points = stats ? calculatePoints(stats) : 0;
+        const points = stats ? calculatePoints(stats, undefined, player.position) : 0;
 
         playerScores.push({
           player,
@@ -143,8 +143,12 @@ function createEmptyStats(playerId: string, week: number): PlayerStats {
     receptions: 0,
     receivingYards: 0,
     receivingTDs: 0,
-    fieldGoals: 0,
-    extraPoints: 0,
+    fg0_39: 0,
+    fg40_49: 0,
+    fg50Plus: 0,
+    fgMissed: 0,
+    xpMade: 0,
+    xpMissed: 0,
     pointsAllowed: 0,
     sacks: 0,
     defensiveInterceptions: 0,
@@ -225,7 +229,8 @@ export function useMultiWeekStandings(
             if (!playerId) continue;
             const stats = statsMap.get(playerId);
             if (stats) {
-              weekPoints += calculatePoints(stats);
+              const player = getPlayerById(playerId);
+              weekPoints += calculatePoints(stats, undefined, player?.position);
             }
           }
 
