@@ -13,6 +13,7 @@ interface ScoreboardProps {
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
+  currentUserId?: string;
 }
 
 // Week-specific roster score with player breakdown
@@ -32,6 +33,7 @@ export function Scoreboard({
   loading,
   error,
   onRefresh,
+  currentUserId,
 }: ScoreboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overall');
   const [weekData, setWeekData] = useState<WeekRosterScore[]>([]);
@@ -180,6 +182,7 @@ export function Scoreboard({
           expandedUser={expandedUser}
           onExpandUser={setExpandedUser}
           onRefresh={() => loadWeekData(activeTab)}
+          currentUserId={currentUserId}
         />
       )}
     </div>
@@ -344,12 +347,14 @@ function WeekStandings({
   expandedUser,
   onExpandUser,
   onRefresh,
+  currentUserId,
 }: {
   weekName: PlayoffWeekName;
   rosterScores: WeekRosterScore[];
   expandedUser: string | null;
   onExpandUser: (uid: string | null) => void;
   onRefresh: () => void;
+  currentUserId?: string;
 }) {
   if (rosterScores.length === 0) {
     return (
@@ -380,15 +385,20 @@ function WeekStandings({
       </div>
 
       <div className="space-y-3">
-        {rosterScores.map((entry, index) => (
+        {rosterScores.map((entry, index) => {
+          // Roster is visible if it's locked OR it belongs to the current user
+          const isOwnRoster = entry.user.uid === currentUserId;
+          const canViewRoster = entry.roster.locked || isOwnRoster;
+
+          return (
           <div
             key={entry.user.uid}
             className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
           >
             {/* User Header */}
             <button
-              onClick={() => onExpandUser(expandedUser === entry.user.uid ? null : entry.user.uid)}
-              className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
+              onClick={() => canViewRoster && onExpandUser(expandedUser === entry.user.uid ? null : entry.user.uid)}
+              className={`w-full flex items-center gap-4 p-4 transition-colors ${canViewRoster ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'}`}
             >
               {/* Rank */}
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -409,27 +419,39 @@ function WeekStandings({
                   <p className="font-medium text-gray-900">{entry.user.displayName || 'Anonymous'}</p>
                   <p className="text-xs text-gray-500">
                     {entry.roster.locked ? 'Locked' : 'Not locked'}
+                    {isOwnRoster && ' (You)'}
                   </p>
                 </div>
               </div>
 
-              {/* Total Points */}
+              {/* Total Points - hidden for unlocked rosters that aren't yours */}
               <div className="text-right">
-                <p className="text-2xl font-bold text-gray-900">{formatPoints(entry.totalPoints)}</p>
-                <p className="text-xs text-gray-500">points</p>
+                {canViewRoster ? (
+                  <>
+                    <p className="text-2xl font-bold text-gray-900">{formatPoints(entry.totalPoints)}</p>
+                    <p className="text-xs text-gray-500">points</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-gray-400">--</p>
+                    <p className="text-xs text-gray-400">hidden</p>
+                  </>
+                )}
               </div>
 
-              {/* Expand Icon */}
-              <svg
-                className={`w-5 h-5 text-gray-400 transition-transform ${expandedUser === entry.user.uid ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              {/* Expand Icon - only show if can view */}
+              {canViewRoster && (
+                <svg
+                  className={`w-5 h-5 text-gray-400 transition-transform ${expandedUser === entry.user.uid ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
             </button>
 
-            {/* Expanded Player Details */}
-            {expandedUser === entry.user.uid && (
+            {/* Expanded Player Details - only if can view */}
+            {canViewRoster && expandedUser === entry.user.uid && (
               <div className="border-t border-gray-200 p-4 bg-gray-50">
                 <h4 className="text-sm font-medium text-gray-700 mb-3">Roster Breakdown</h4>
                 <div className="space-y-2">
@@ -470,7 +492,8 @@ function WeekStandings({
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );

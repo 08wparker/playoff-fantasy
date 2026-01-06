@@ -82,6 +82,7 @@ function AppContent() {
           loading={scoresLoading}
           error={scoresError}
           onRefresh={refreshScores}
+          currentUserId={user?.uid}
         />
       ) : (
         <div className="space-y-6">
