@@ -5,6 +5,9 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
@@ -66,6 +69,95 @@ export async function signInWithGoogle(): Promise<User | null> {
   } catch (error) {
     console.error('Error signing in with Google:', error);
     return null;
+  }
+}
+
+// Email/password sign up
+export async function signUpWithEmail(email: string, password: string, displayName: string): Promise<{ user: User | null; error: string | null }> {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    const user = result.user;
+
+    // Set display name
+    await updateProfile(user, { displayName });
+
+    // Save user in Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      displayName,
+      email: user.email,
+      photoURL: null,
+    }, { merge: true });
+
+    // Initialize usedPlayers
+    const usedPlayersRef = doc(db, 'usedPlayers', user.uid);
+    const usedPlayersSnap = await getDoc(usedPlayersRef);
+    if (!usedPlayersSnap.exists()) {
+      await setDoc(usedPlayersRef, { players: [] });
+    }
+
+    return {
+      user: {
+        uid: user.uid,
+        displayName,
+        email: user.email,
+        photoURL: null,
+      },
+      error: null,
+    };
+  } catch (error: unknown) {
+    const firebaseError = error as { code?: string; message?: string };
+    let errorMessage = 'Failed to create account';
+    if (firebaseError.code === 'auth/email-already-in-use') {
+      errorMessage = 'Email already in use';
+    } else if (firebaseError.code === 'auth/weak-password') {
+      errorMessage = 'Password must be at least 6 characters';
+    } else if (firebaseError.code === 'auth/invalid-email') {
+      errorMessage = 'Invalid email address';
+    }
+    console.error('Error signing up:', error);
+    return { user: null, error: errorMessage };
+  }
+}
+
+// Email/password sign in
+export async function signInWithEmail(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const user = result.user;
+
+    // Update user in Firestore (in case displayName changed)
+    await setDoc(doc(db, 'users', user.uid), {
+      displayName: user.displayName,
+      email: user.email,
+      photoURL: user.photoURL,
+    }, { merge: true });
+
+    // Initialize usedPlayers if doesn't exist
+    const usedPlayersRef = doc(db, 'usedPlayers', user.uid);
+    const usedPlayersSnap = await getDoc(usedPlayersRef);
+    if (!usedPlayersSnap.exists()) {
+      await setDoc(usedPlayersRef, { players: [] });
+    }
+
+    return {
+      user: {
+        uid: user.uid,
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+      },
+      error: null,
+    };
+  } catch (error: unknown) {
+    const firebaseError = error as { code?: string; message?: string };
+    let errorMessage = 'Failed to sign in';
+    if (firebaseError.code === 'auth/user-not-found' || firebaseError.code === 'auth/wrong-password' || firebaseError.code === 'auth/invalid-credential') {
+      errorMessage = 'Invalid email or password';
+    } else if (firebaseError.code === 'auth/invalid-email') {
+      errorMessage = 'Invalid email address';
+    }
+    console.error('Error signing in:', error);
+    return { user: null, error: errorMessage };
   }
 }
 
