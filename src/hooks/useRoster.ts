@@ -84,7 +84,7 @@ export function useRoster(userId: string | null, week: number): UseRosterResult 
     });
   }, []);
 
-  // Save roster to Firestore and update used players
+  // Save roster to Firestore
   const saveCurrentRoster = useCallback(async (): Promise<boolean> => {
     if (!roster || !userId) {
       setError('No roster to save');
@@ -101,30 +101,6 @@ export function useRoster(userId: string | null, week: number): UseRosterResult 
 
     if (!success) {
       setError('Failed to save roster');
-      return false;
-    }
-
-    // Get all selected player IDs and add to used players
-    const selectedPlayerIds = [
-      roster.qb,
-      roster.rb1,
-      roster.rb2,
-      roster.wr1,
-      roster.wr2,
-      roster.wr3,
-      roster.te,
-      roster.dst,
-      roster.k,
-    ].filter((id): id is string => id !== null);
-
-    if (selectedPlayerIds.length > 0) {
-      const usedSuccess = await addUsedPlayers(userId, selectedPlayerIds);
-      if (usedSuccess) {
-        setUsedPlayers((current) => {
-          const newSet = new Set([...current, ...selectedPlayerIds]);
-          return Array.from(newSet);
-        });
-      }
     }
 
     return success;
