@@ -2,13 +2,14 @@ import { useState, ReactNode } from 'react';
 import { AuthContext, useAuthProvider, useAuth } from './hooks/useAuth';
 import { useRoster } from './hooks/useRoster';
 import { usePlayers } from './hooks/usePlayers';
-import { useScoring } from './hooks/useScoring';
+import { useMultiWeekStandings } from './hooks/useScoring';
 import { getCurrentPlayoffWeek, getPlayoffWeekName } from './services/espnApi';
 import { GoogleSignIn } from './components/auth/GoogleSignIn';
 import { Layout } from './components/layout/Layout';
 import { RosterBuilder } from './components/roster/RosterBuilder';
 import { Scoreboard } from './components/scoring/Scoreboard';
 import { AdminSync } from './components/admin/AdminSync';
+import { AdminStats } from './components/admin/AdminStats';
 
 // Admin email addresses
 const ADMIN_EMAILS = ['williamfparker@gmail.com'];
@@ -48,13 +49,13 @@ function AppContent() {
     lockCurrentRoster,
   } = useRoster(user?.uid || null, currentWeek);
 
-  // Load scoreboard
+  // Load scoreboard (multi-week standings)
   const {
     standings,
     loading: scoresLoading,
     error: scoresError,
-    refreshScores,
-  } = useScoring(currentWeek, getPlayerById);
+    refresh: refreshScores,
+  } = useMultiWeekStandings(getPlayerById);
 
   return (
     <Layout
@@ -81,11 +82,13 @@ function AppContent() {
           standings={standings}
           loading={scoresLoading}
           error={scoresError}
-          currentWeek={currentWeek}
           onRefresh={refreshScores}
         />
       ) : (
-        <AdminSync />
+        <div className="space-y-6">
+          <AdminStats />
+          <AdminSync />
+        </div>
       )}
     </Layout>
   );

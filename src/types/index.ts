@@ -9,6 +9,23 @@ export interface User {
 // Player positions
 export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DST';
 
+// Playoff week names
+export type PlayoffWeekName = 'wildcard' | 'divisional' | 'championship' | 'superbowl';
+
+export const PLAYOFF_WEEK_NAMES: Record<number, PlayoffWeekName> = {
+  1: 'wildcard',
+  2: 'divisional',
+  3: 'championship',
+  4: 'superbowl',
+};
+
+export const PLAYOFF_WEEK_DISPLAY_NAMES: Record<PlayoffWeekName, string> = {
+  wildcard: 'Wild Card',
+  divisional: 'Divisional',
+  championship: 'Championship',
+  superbowl: 'Super Bowl',
+};
+
 // NFL Team abbreviations
 export type NFLTeam =
   | 'ARI' | 'ATL' | 'BAL' | 'BUF' | 'CAR' | 'CHI' | 'CIN' | 'CLE'
@@ -84,6 +101,19 @@ export interface PlayoffWeek {
   name: string; // "Wild Card", "Divisional", "Conference", "Super Bowl"
   teams: NFLTeam[];
   lockTime: Date;
+}
+
+// Playoff config per week (stored in Firebase)
+export interface PlayoffConfig {
+  weekName: PlayoffWeekName;
+  teams: NFLTeam[];
+  updatedAt?: Date;
+}
+
+// Player rank per week (stored in Firebase)
+export interface PlayerRank {
+  playerId: string;
+  rank: number;
 }
 
 // Scoring summary for display

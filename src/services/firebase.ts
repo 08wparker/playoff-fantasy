@@ -18,7 +18,7 @@ import {
   arrayUnion,
   onSnapshot,
 } from 'firebase/firestore';
-import type { User, WeeklyRoster, UsedPlayers, Player } from '../types';
+import type { User, WeeklyRoster, UsedPlayers, Player, PlayerStats, PlayoffWeekName, NFLTeam } from '../types';
 
 // Firebase configuration - Replace with your own config from Firebase Console
 const firebaseConfig = {
@@ -263,38 +263,87 @@ export async function clearAllPlayers(): Promise<void> {
   }
 }
 
+// NFL team logo URLs (using ESPN CDN)
+const NFL_TEAM_LOGOS: Record<string, string> = {
+  ARI: 'https://a.espncdn.com/i/teamlogos/nfl/500/ari.png',
+  ATL: 'https://a.espncdn.com/i/teamlogos/nfl/500/atl.png',
+  BAL: 'https://a.espncdn.com/i/teamlogos/nfl/500/bal.png',
+  BUF: 'https://a.espncdn.com/i/teamlogos/nfl/500/buf.png',
+  CAR: 'https://a.espncdn.com/i/teamlogos/nfl/500/car.png',
+  CHI: 'https://a.espncdn.com/i/teamlogos/nfl/500/chi.png',
+  CIN: 'https://a.espncdn.com/i/teamlogos/nfl/500/cin.png',
+  CLE: 'https://a.espncdn.com/i/teamlogos/nfl/500/cle.png',
+  DAL: 'https://a.espncdn.com/i/teamlogos/nfl/500/dal.png',
+  DEN: 'https://a.espncdn.com/i/teamlogos/nfl/500/den.png',
+  DET: 'https://a.espncdn.com/i/teamlogos/nfl/500/det.png',
+  GB: 'https://a.espncdn.com/i/teamlogos/nfl/500/gb.png',
+  HOU: 'https://a.espncdn.com/i/teamlogos/nfl/500/hou.png',
+  IND: 'https://a.espncdn.com/i/teamlogos/nfl/500/ind.png',
+  JAX: 'https://a.espncdn.com/i/teamlogos/nfl/500/jax.png',
+  KC: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png',
+  LAC: 'https://a.espncdn.com/i/teamlogos/nfl/500/lac.png',
+  LAR: 'https://a.espncdn.com/i/teamlogos/nfl/500/lar.png',
+  LV: 'https://a.espncdn.com/i/teamlogos/nfl/500/lv.png',
+  MIA: 'https://a.espncdn.com/i/teamlogos/nfl/500/mia.png',
+  MIN: 'https://a.espncdn.com/i/teamlogos/nfl/500/min.png',
+  NE: 'https://a.espncdn.com/i/teamlogos/nfl/500/ne.png',
+  NO: 'https://a.espncdn.com/i/teamlogos/nfl/500/no.png',
+  NYG: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png',
+  NYJ: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png',
+  PHI: 'https://a.espncdn.com/i/teamlogos/nfl/500/phi.png',
+  PIT: 'https://a.espncdn.com/i/teamlogos/nfl/500/pit.png',
+  SEA: 'https://a.espncdn.com/i/teamlogos/nfl/500/sea.png',
+  SF: 'https://a.espncdn.com/i/teamlogos/nfl/500/sf.png',
+  TB: 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png',
+  TEN: 'https://a.espncdn.com/i/teamlogos/nfl/500/ten.png',
+  WAS: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png',
+};
+
 // Sync players from CSV to Firestore with ESPN headshots
+// Note: rank is NOT stored with player - it's stored separately per week in playerRanks collection
 export async function syncPlayersToFirestore(
   players: Player[],
   espnPlayerMap: Map<string, { espnId: string; imageUrl?: string }>
-): Promise<{ synced: number; notFound: string[] }> {
+): Promise<{ synced: number; notFound: string[]; byPosition: Record<string, number>; playerIdMap: Map<string, string> }> {
   const notFound: string[] = [];
   let synced = 0;
+  const byPosition: Record<string, number> = {};
+  const playerIdMap = new Map<string, string>(); // Maps CSV player name -> Firebase doc ID
 
   // First clear existing players
   await clearAllPlayers();
+  console.log(`Syncing ${players.length} players from CSV...`);
 
   // Then add new players
   for (const player of players) {
     const nameLower = player.name.toLowerCase().trim();
     const espnData = espnPlayerMap.get(nameLower);
 
-    const playerToSave: Player = {
-      ...player,
-      imageUrl: espnData?.imageUrl || player.imageUrl,
-    };
+    // Determine image URL: ESPN headshot, or team logo for DST/K
+    let imageUrl = espnData?.imageUrl;
+    if (!imageUrl && (player.position === 'DST' || player.position === 'K')) {
+      imageUrl = NFL_TEAM_LOGOS[player.team] || undefined;
+    }
 
     // Use ESPN ID if found, otherwise use the CSV-generated ID
     const docId = espnData?.espnId || player.id;
 
+    // Save player WITHOUT rank (rank is stored separately per week)
+    const playerToSave = {
+      id: docId,
+      name: player.name,
+      team: player.team,
+      position: player.position,
+      imageUrl,
+    };
+
     try {
-      await setDoc(doc(db, 'players', docId), {
-        ...playerToSave,
-        id: docId,
-      });
+      await setDoc(doc(db, 'players', docId), playerToSave);
       synced++;
+      byPosition[player.position] = (byPosition[player.position] || 0) + 1;
+      playerIdMap.set(player.name, docId);
     } catch (error) {
-      console.error(`Error saving player ${player.name}:`, error);
+      console.error(`Error saving player ${player.name} (${player.position}):`, error);
     }
 
     if (!espnData) {
@@ -302,6 +351,159 @@ export async function syncPlayersToFirestore(
     }
   }
 
-  console.log(`Synced ${synced} players, ${notFound.length} not found in ESPN`);
-  return { synced, notFound };
+  console.log(`Synced ${synced} players by position:`, byPosition);
+  console.log(`${notFound.length} players not found in ESPN`);
+  return { synced, notFound, byPosition, playerIdMap };
+}
+
+// Player stats functions - stored by week name (wildcard, divisional, etc.)
+
+// Get stats for a specific player in a specific week
+export async function getPlayerStats(
+  weekName: PlayoffWeekName,
+  playerId: string
+): Promise<PlayerStats | null> {
+  try {
+    const statsRef = doc(db, 'playerStats', weekName, 'players', playerId);
+    const statsSnap = await getDoc(statsRef);
+
+    if (statsSnap.exists()) {
+      return statsSnap.data() as PlayerStats;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting player stats:', error);
+    return null;
+  }
+}
+
+// Save stats for a player in a specific week
+export async function savePlayerStats(
+  weekName: PlayoffWeekName,
+  playerId: string,
+  stats: Omit<PlayerStats, 'playerId' | 'week'>
+): Promise<boolean> {
+  try {
+    const weekNumber = { wildcard: 1, divisional: 2, championship: 3, superbowl: 4 }[weekName];
+    const statsRef = doc(db, 'playerStats', weekName, 'players', playerId);
+    await setDoc(statsRef, {
+      ...stats,
+      playerId,
+      week: weekNumber,
+    });
+    return true;
+  } catch (error) {
+    console.error('Error saving player stats:', error);
+    return false;
+  }
+}
+
+// Get all player stats for a specific week
+export async function getAllPlayerStatsForWeek(
+  weekName: PlayoffWeekName
+): Promise<PlayerStats[]> {
+  try {
+    const statsRef = collection(db, 'playerStats', weekName, 'players');
+    const statsSnap = await getDocs(statsRef);
+
+    return statsSnap.docs.map(doc => doc.data() as PlayerStats);
+  } catch (error) {
+    console.error('Error getting all player stats for week:', error);
+    return [];
+  }
+}
+
+// Subscribe to player stats for a week (real-time updates)
+export function subscribeToWeekStats(
+  weekName: PlayoffWeekName,
+  callback: (stats: PlayerStats[]) => void
+): () => void {
+  const statsRef = collection(db, 'playerStats', weekName, 'players');
+  return onSnapshot(statsRef, (snapshot) => {
+    const stats = snapshot.docs.map(doc => doc.data() as PlayerStats);
+    callback(stats);
+  });
+}
+
+// ============================================
+// Playoff Config functions (teams per week)
+// ============================================
+
+// Save playoff config for a week (teams playing that week)
+export async function savePlayoffConfig(
+  weekName: PlayoffWeekName,
+  teams: NFLTeam[]
+): Promise<boolean> {
+  try {
+    const configRef = doc(db, 'playoffConfig', weekName);
+    await setDoc(configRef, {
+      weekName,
+      teams,
+      updatedAt: new Date(),
+    });
+    console.log(`Saved playoff config for ${weekName}: ${teams.length} teams`);
+    return true;
+  } catch (error) {
+    console.error('Error saving playoff config:', error);
+    return false;
+  }
+}
+
+// Get playoff config for a week
+export async function getPlayoffConfig(weekName: PlayoffWeekName): Promise<NFLTeam[]> {
+  try {
+    const configRef = doc(db, 'playoffConfig', weekName);
+    const configSnap = await getDoc(configRef);
+
+    if (configSnap.exists()) {
+      return configSnap.data().teams as NFLTeam[];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error getting playoff config:', error);
+    return [];
+  }
+}
+
+// ============================================
+// Player Ranks functions (ranks per week)
+// ============================================
+
+// Save player ranks for a week
+export async function savePlayerRanks(
+  weekName: PlayoffWeekName,
+  ranks: Map<string, number>
+): Promise<boolean> {
+  try {
+    // Save each player's rank as a separate document
+    const promises: Promise<void>[] = [];
+    ranks.forEach((rank, playerId) => {
+      const rankRef = doc(db, 'playerRanks', weekName, 'players', playerId);
+      promises.push(setDoc(rankRef, { playerId, rank }));
+    });
+    await Promise.all(promises);
+    console.log(`Saved ${ranks.size} player ranks for ${weekName}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving player ranks:', error);
+    return false;
+  }
+}
+
+// Get all player ranks for a week
+export async function getPlayerRanks(weekName: PlayoffWeekName): Promise<Map<string, number>> {
+  try {
+    const ranksRef = collection(db, 'playerRanks', weekName, 'players');
+    const ranksSnap = await getDocs(ranksRef);
+
+    const ranks = new Map<string, number>();
+    ranksSnap.docs.forEach(doc => {
+      const data = doc.data();
+      ranks.set(data.playerId, data.rank);
+    });
+    return ranks;
+  } catch (error) {
+    console.error('Error getting player ranks:', error);
+    return new Map();
+  }
 }

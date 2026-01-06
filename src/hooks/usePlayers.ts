@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Player, Position } from '../types';
-import { PLAYOFF_TEAMS, WEEK_CSV_FILES } from '../data/players';
-import { getCachedPlayers } from '../services/firebase';
+import type { Player, Position, PlayoffWeekName } from '../types';
+import { PLAYOFF_WEEK_NAMES } from '../types';
+import { getCachedPlayers, getPlayoffConfig, getPlayerRanks } from '../services/firebase';
 
 interface UsePlayersResult {
   players: Player[];
@@ -11,40 +11,6 @@ interface UsePlayersResult {
   getPlayersByPosition: (position: Position) => Player[];
   getAvailablePlayers: (position: Position, usedPlayerIds: string[]) => Player[];
   refreshPlayers: () => Promise<void>;
-}
-
-// Parse CSV text into Player objects
-function parseCSV(csvText: string): Player[] {
-  const lines = csvText.trim().split('\n');
-  const players: Player[] = [];
-
-  // Skip header row
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    // Handle CSV parsing (simple - assumes no commas in values)
-    const parts = line.split(',');
-    if (parts.length >= 4) {
-      const name = parts[0].trim();
-      const position = parts[1].trim() as Position;
-      const team = parts[2].trim();
-      const rank = parseInt(parts[3].trim(), 10) || undefined;
-
-      // Create a unique ID from name and position
-      const id = `${position.toLowerCase()}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-
-      players.push({
-        id,
-        name,
-        position,
-        team: team as any,
-        rank,
-      });
-    }
-  }
-
-  return players;
 }
 
 export function usePlayers(week: number): UsePlayersResult {
@@ -69,43 +35,40 @@ export function usePlayers(week: number): UsePlayersResult {
     setError(null);
 
     try {
-      // Get the CSV file for this week (default to wildcard)
-      const csvPath = WEEK_CSV_FILES[week] || WEEK_CSV_FILES[1];
-
-      // Fetch the CSV file and Firebase cached players in parallel
-      const [csvResponse, firebasePlayers] = await Promise.all([
-        fetch(csvPath),
-        getCachedPlayers(),
-      ]);
-
-      if (!csvResponse.ok) {
-        throw new Error(`Failed to load player data: ${csvResponse.status}`);
+      // Get week name from week number
+      const weekName = PLAYOFF_WEEK_NAMES[week] as PlayoffWeekName;
+      if (!weekName) {
+        throw new Error(`Invalid week number: ${week}`);
       }
 
-      const csvText = await csvResponse.text();
-      const allPlayers = parseCSV(csvText);
+      // Load playoff config (teams), players, and ranks from Firebase in parallel
+      const [teams, allPlayers, ranks] = await Promise.all([
+        getPlayoffConfig(weekName),
+        getCachedPlayers(),
+        getPlayerRanks(weekName),
+      ]);
 
-      // Create a map of Firebase players by name for image lookup
-      const firebasePlayerMap = new Map<string, Player>();
-      firebasePlayers.forEach((p) => {
-        firebasePlayerMap.set(p.name.toLowerCase(), p);
-      });
+      console.log(`Loaded for ${weekName}: ${teams.length} teams, ${allPlayers.length} players, ${ranks.size} ranks`);
 
-      // Filter players to only include those on playoff teams
-      // and merge with Firebase data for imageUrls
+      if (teams.length === 0) {
+        console.warn(`No teams configured for ${weekName}. Run the sync for this week first.`);
+      }
+
+      // Filter players to only include those on active teams for this week
+      // and add their rank for this week
+      const teamsSet = new Set(teams);
       const playoffPlayers = allPlayers
-        .filter(p => PLAYOFF_TEAMS.includes(p.team as any))
-        .map(p => {
-          const firebasePlayer = firebasePlayerMap.get(p.name.toLowerCase());
-          return {
-            ...p,
-            imageUrl: firebasePlayer?.imageUrl || p.imageUrl,
-          };
-        });
+        .filter(p => teamsSet.has(p.team))
+        .map(p => ({
+          ...p,
+          rank: ranks.get(p.id),
+        }));
+
+      console.log(`Filtered to ${playoffPlayers.length} players on active teams`);
 
       setPlayers(playoffPlayers);
     } catch (err) {
-      setError('Failed to load players. Make sure the CSV file exists.');
+      setError('Failed to load players. Make sure you\'ve run the sync for this week.');
       console.error('Error loading players:', err);
     } finally {
       setLoading(false);

@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
-import type { User, WeeklyRoster, Player, RosterScore, PlayerScore, PlayerStats } from '../types';
-import { getAllUsers, getAllRostersForWeek } from '../services/firebase';
-import { fetchPlayerStats } from '../services/espnApi';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import type { User, WeeklyRoster, Player, RosterScore, PlayerScore, PlayerStats, PlayoffWeekName } from '../types';
+import { PLAYOFF_WEEK_NAMES, PLAYOFF_WEEK_DISPLAY_NAMES } from '../types';
+import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek } from '../services/firebase';
 import { calculatePoints } from '../services/scoring';
 
 interface UseScoringResult {
@@ -21,42 +21,33 @@ export function useScoring(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load data on mount and week change
-  useEffect(() => {
-    loadScoreData();
-  }, [week]);
-
-  async function loadScoreData() {
+  const loadScoreData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Fetch users and rosters in parallel
-      const [usersData, rostersData] = await Promise.all([
+      const weekName = PLAYOFF_WEEK_NAMES[week] as PlayoffWeekName;
+      if (!weekName) {
+        throw new Error(`Invalid week number: ${week}`);
+      }
+
+      // Fetch users, rosters, and player stats from Firebase in parallel
+      const [usersData, rostersData, statsData] = await Promise.all([
         getAllUsers(),
         getAllRostersForWeek(week),
+        getAllPlayerStatsForWeek(weekName),
       ]);
+
+      console.log(`Loaded scores for ${weekName}: ${usersData.length} users, ${rostersData.length} rosters, ${statsData.length} player stats`);
 
       setUsers(usersData);
       setRosters(rostersData);
 
-      // Get unique player IDs from all rosters
-      const playerIds = new Set<string>();
-      rostersData.forEach((roster) => {
-        [roster.qb, roster.rb1, roster.rb2, roster.wr1, roster.wr2, roster.wr3, roster.te, roster.dst, roster.k]
-          .filter((id): id is string => id !== null)
-          .forEach((id) => playerIds.add(id));
-      });
-
-      // Fetch stats for all players
+      // Convert stats array to map by playerId
       const stats = new Map<string, PlayerStats>();
-      for (const playerId of playerIds) {
-        const playerStat = await fetchPlayerStats(playerId, week);
-        if (playerStat) {
-          stats.set(playerId, playerStat);
-        }
-      }
-
+      statsData.forEach(stat => {
+        stats.set(stat.playerId, stat);
+      });
       setPlayerStats(stats);
     } catch (err) {
       setError('Failed to load scores');
@@ -64,7 +55,12 @@ export function useScoring(
     } finally {
       setLoading(false);
     }
-  }
+  }, [week]);
+
+  // Load data on mount and week change
+  useEffect(() => {
+    loadScoreData();
+  }, [loadScoreData]);
 
   async function refreshScores() {
     await loadScoreData();
@@ -124,7 +120,7 @@ export function useScoring(
     scores.sort((a, b) => b.totalPoints - a.totalPoints);
 
     return scores;
-  }, [users, rosters, playerStats, getPlayerById]);
+  }, [users, rosters, playerStats, getPlayerById, week]);
 
   return {
     standings,
@@ -157,59 +153,109 @@ function createEmptyStats(playerId: string, week: number): PlayerStats {
   };
 }
 
-// Get cumulative standings across all weeks
-export function useCumulativeStandings(
-  maxWeek: number,
-  _getPlayerById: (id: string) => Player | undefined
-): { standings: { user: User; totalPoints: number; weeklyPoints: number[] }[]; loading: boolean } {
-  const [standings, setStandings] = useState<{ user: User; totalPoints: number; weeklyPoints: number[] }[]>([]);
+// Multi-week standings data structure
+export interface MultiWeekStanding {
+  user: User;
+  weeklyPoints: Record<PlayoffWeekName, number>;
+  totalPoints: number;
+}
+
+// Get standings across all weeks with per-week breakdown
+export function useMultiWeekStandings(
+  getPlayerById: (id: string) => Player | undefined
+): {
+  standings: MultiWeekStanding[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+} {
+  const [standings, setStandings] = useState<MultiWeekStanding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadCumulativeData() {
-      setLoading(true);
+  const loadAllData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const users = await getAllUsers();
-        const userStandings: Map<string, { user: User; totalPoints: number; weeklyPoints: number[] }> = new Map();
+    try {
+      const users = await getAllUsers();
+      const weeks: PlayoffWeekName[] = ['wildcard', 'divisional', 'championship', 'superbowl'];
 
-        // Initialize standings for each user
-        for (const user of users) {
-          userStandings.set(user.uid, {
-            user,
-            totalPoints: 0,
-            weeklyPoints: [],
-          });
-        }
+      // Initialize standings for each user
+      const userStandings = new Map<string, MultiWeekStanding>();
+      for (const user of users) {
+        userStandings.set(user.uid, {
+          user,
+          weeklyPoints: {
+            wildcard: 0,
+            divisional: 0,
+            championship: 0,
+            superbowl: 0,
+          },
+          totalPoints: 0,
+        });
+      }
 
-        // Load data for each week
-        for (let week = 1; week <= maxWeek; week++) {
-          const rosters = await getAllRostersForWeek(week);
+      // Load data for each week
+      for (let weekNum = 1; weekNum <= 4; weekNum++) {
+        const weekName = PLAYOFF_WEEK_NAMES[weekNum] as PlayoffWeekName;
 
-          for (const roster of rosters) {
-            const standing = userStandings.get(roster.odId);
-            if (standing) {
-              standing.weeklyPoints.push(roster.totalPoints);
-              standing.totalPoints += roster.totalPoints;
+        const [rosters, statsData] = await Promise.all([
+          getAllRostersForWeek(weekNum),
+          getAllPlayerStatsForWeek(weekName),
+        ]);
+
+        // Convert stats to map
+        const statsMap = new Map<string, PlayerStats>();
+        statsData.forEach(stat => statsMap.set(stat.playerId, stat));
+
+        // Calculate points for each roster
+        for (const roster of rosters) {
+          const standing = userStandings.get(roster.odId);
+          if (!standing) continue;
+
+          let weekPoints = 0;
+          const slots = [
+            roster.qb, roster.rb1, roster.rb2,
+            roster.wr1, roster.wr2, roster.wr3,
+            roster.te, roster.dst, roster.k,
+          ];
+
+          for (const playerId of slots) {
+            if (!playerId) continue;
+            const stats = statsMap.get(playerId);
+            if (stats) {
+              weekPoints += calculatePoints(stats);
             }
           }
+
+          standing.weeklyPoints[weekName] = weekPoints;
+          standing.totalPoints += weekPoints;
         }
-
-        // Convert to array and sort
-        const sortedStandings = Array.from(userStandings.values()).sort(
-          (a, b) => b.totalPoints - a.totalPoints
-        );
-
-        setStandings(sortedStandings);
-      } catch (err) {
-        console.error('Error loading cumulative standings:', err);
-      } finally {
-        setLoading(false);
       }
+
+      // Convert to array and sort by total points
+      const sortedStandings = Array.from(userStandings.values())
+        .filter(s => s.totalPoints > 0 || Object.values(s.weeklyPoints).some(p => p > 0))
+        .sort((a, b) => b.totalPoints - a.totalPoints);
+
+      setStandings(sortedStandings);
+    } catch (err) {
+      setError('Failed to load standings');
+      console.error('Error loading multi-week standings:', err);
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    loadCumulativeData();
-  }, [maxWeek]);
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
 
-  return { standings, loading };
+  return {
+    standings,
+    loading,
+    error,
+    refresh: loadAllData,
+  };
 }
