@@ -4,7 +4,7 @@ import { ROSTER_SLOTS } from '../../types';
 import { PositionSlot } from './PositionSlot';
 import { AvailablePlayers } from './AvailablePlayers';
 import { ScoringRubric } from './ScoringRubric';
-import { isRosterLocked, getTimeUntilLock } from '../../data/players';
+import { isRosterLocked, getTimeUntilLock, getLockTimeFormatted } from '../../data/players';
 
 interface RosterBuilderProps {
   roster: WeeklyRoster | null;
@@ -39,6 +39,7 @@ export function RosterBuilder({
   // Check if roster is locked by time
   const isTimeLocked = isRosterLocked(currentWeek);
   const lockTimeDisplay = getTimeUntilLock(currentWeek);
+  const lockTimeFormatted = getLockTimeFormatted(currentWeek);
   const isLocked = isTimeLocked || roster?.locked;
 
   // Get current roster player IDs
@@ -163,7 +164,8 @@ export function RosterBuilder({
         <ul className="text-sm text-gray-600 space-y-2">
           <li>• <strong>Roster:</strong> 1 QB, 2 RB, 3 WR, 1 TE, 1 D/ST, 1 K</li>
           <li>• <strong>One-time use:</strong> You can choose any player you want, but you can only use a player in ONE playoff game. For example, if you choose Josh Allen in the Wild Card round and the Bills win, you cannot play him in the Divisional round.</li>
-          <li>• <strong>Deadline:</strong> Rosters lock automatically at kickoff each week</li>
+          <li>• <strong>Changes allowed:</strong> You can change your roster as many times as you want before the lock time</li>
+          <li>• <strong>Lock time:</strong> {lockTimeFormatted || 'TBD'}</li>
         </ul>
       </div>
 

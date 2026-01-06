@@ -2,9 +2,10 @@ interface TabNavProps {
   activeTab: 'roster' | 'scores' | 'admin';
   onTabChange: (tab: 'roster' | 'scores' | 'admin') => void;
   showAdmin?: boolean;
+  weekName?: string;
 }
 
-export function TabNav({ activeTab, onTabChange, showAdmin = false }: TabNavProps) {
+export function TabNav({ activeTab, onTabChange, showAdmin = false, weekName }: TabNavProps) {
   return (
     <nav className="bg-white border-b border-gray-200">
       <div className="max-w-6xl mx-auto px-4">
@@ -17,7 +18,7 @@ export function TabNav({ activeTab, onTabChange, showAdmin = false }: TabNavProp
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            My Roster
+            Set Roster {weekName ? `(${weekName})` : ''}
           </button>
           <button
             onClick={() => onTabChange('scores')}

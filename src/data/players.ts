@@ -48,3 +48,18 @@ export function getTimeUntilLock(week: number): string {
   if (hours > 0) return `${hours}h ${minutes}m until lock`;
   return `${minutes}m until lock`;
 }
+
+// Get formatted lock time for display
+export function getLockTimeFormatted(week: number): string {
+  const lockTime = WEEK_LOCK_TIMES[week];
+  if (!lockTime) return '';
+
+  return lockTime.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+}
