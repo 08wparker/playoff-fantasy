@@ -149,6 +149,11 @@ export function GoogleSignIn() {
         <p className="text-center text-xs text-gray-500 mt-6">
           Sign in to join the league and start picking your roster
         </p>
+
+        <p className="text-center text-xs text-gray-400 mt-4">
+          Made by WFP (williamfparker@gmail.com)<br />
+          for NARC and the Younus Youngboys
+        </p>
       </div>
     </div>
   );
