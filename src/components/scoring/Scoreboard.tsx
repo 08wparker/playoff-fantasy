@@ -35,15 +35,10 @@ export function Scoreboard({
   onRefresh,
   currentUserId,
 }: ScoreboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('overall');
+  const [activeTab, setActiveTab] = useState<TabType>('wildcard');
   const [weekData, setWeekData] = useState<WeekRosterScore[]>([]);
   const [weekLoading, setWeekLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
-
-  // Auto-refresh overall standings when component mounts
-  useEffect(() => {
-    onRefresh();
-  }, []);
 
   // Load week-specific data when a week tab is selected
   const loadWeekData = useCallback(async (weekName: PlayoffWeekName) => {
@@ -112,6 +107,11 @@ export function Scoreboard({
       setWeekLoading(false);
     }
   }, []);
+
+  // Load wildcard data when component mounts
+  useEffect(() => {
+    loadWeekData('wildcard');
+  }, [loadWeekData]);
 
   // Handle tab change
   const handleTabChange = (tab: TabType) => {
