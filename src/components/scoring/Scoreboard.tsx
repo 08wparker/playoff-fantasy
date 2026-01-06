@@ -424,9 +424,9 @@ function WeekStandings({
                 </div>
               </div>
 
-              {/* Total Points - hidden for unlocked rosters that aren't yours */}
+              {/* Total Points - only shown for locked rosters */}
               <div className="text-right">
-                {canViewRoster ? (
+                {entry.roster.locked ? (
                   <>
                     <p className="text-2xl font-bold text-gray-900">{formatPoints(entry.totalPoints)}</p>
                     <p className="text-xs text-gray-500">points</p>
@@ -434,7 +434,7 @@ function WeekStandings({
                 ) : (
                   <>
                     <p className="text-2xl font-bold text-gray-400">--</p>
-                    <p className="text-xs text-gray-400">hidden</p>
+                    <p className="text-xs text-gray-400">pending</p>
                   </>
                 )}
               </div>
