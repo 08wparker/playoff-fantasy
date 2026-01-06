@@ -160,11 +160,21 @@ export function RosterBuilder({
       {/* Rules */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
         <h3 className="font-semibold text-gray-800 mb-2">Rules</h3>
-        <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Roster: 1 QB, 2 RB, 3 WR, 1 TE, 1 D/ST, 1 K</li>
-          <li>• Each player can only be used <strong>once</strong> during the entire playoffs</li>
-          <li>• Rosters lock automatically at the deadline each week</li>
-          <li>• Most total points at the end of the playoffs wins!</li>
+        <ul className="text-sm text-gray-600 space-y-2">
+          <li>• <strong>Roster:</strong> 1 QB, 2 RB, 3 WR, 1 TE, 1 D/ST, 1 K</li>
+          <li>• <strong>One-time use:</strong> You can choose any player you want, but you can only use a player in ONE playoff game. For example, if you choose Josh Allen in the Wild Card round and the Bills win, you cannot play him in the Divisional round.</li>
+          <li>• <strong>Deadline:</strong> Rosters lock automatically at kickoff each week</li>
+        </ul>
+      </div>
+
+      {/* Prize Pool */}
+      <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+        <h3 className="font-semibold text-primary-800 mb-2">Prize Pool</h3>
+        <ul className="text-sm text-primary-700 space-y-1">
+          <li>• <strong>1st Place (Cumulative):</strong> 50% of pot</li>
+          <li>• <strong>2nd Place (Cumulative):</strong> 20% of pot</li>
+          <li>• <strong>3rd Place (Cumulative):</strong> 10% of pot</li>
+          <li>• <strong>Weekly High Score:</strong> 5% of pot each week</li>
         </ul>
       </div>
 
