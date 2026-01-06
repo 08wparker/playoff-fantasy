@@ -3,7 +3,7 @@ import { AuthContext, useAuthProvider, useAuth } from './hooks/useAuth';
 import { useRoster } from './hooks/useRoster';
 import { usePlayers } from './hooks/usePlayers';
 import { useMultiWeekStandings } from './hooks/useScoring';
-import { getCurrentPlayoffWeek, getPlayoffWeekName } from './services/espnApi';
+import { useCurrentWeek } from './hooks/useCurrentWeek';
 import { GoogleSignIn } from './components/auth/GoogleSignIn';
 import { Layout } from './components/layout/Layout';
 import { RosterBuilder } from './components/roster/RosterBuilder';
@@ -11,9 +11,11 @@ import { Scoreboard } from './components/scoring/Scoreboard';
 import { AdminSync } from './components/admin/AdminSync';
 import { AdminStats } from './components/admin/AdminStats';
 import { AdminScoringRules } from './components/admin/AdminScoringRules';
+import { AdminWeek } from './components/admin/AdminWeek';
+import { AdminRosterLock } from './components/admin/AdminRosterLock';
 
 // Admin email addresses
-const ADMIN_EMAILS = ['williamfparker@gmail.com'];
+const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
 
 // Auth Provider wrapper
 function AuthProvider({ children }: { children: ReactNode }) {
@@ -25,12 +27,9 @@ function AuthProvider({ children }: { children: ReactNode }) {
 function AppContent() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'roster' | 'scores' | 'admin'>('roster');
-  const [currentWeek] = useState(getCurrentPlayoffWeek());
+  const { week: currentWeek, weekName, loading: weekLoading } = useCurrentWeek();
 
-  const weekName = getPlayoffWeekName(currentWeek);
-  // Temporarily show admin for all users - check console for actual email
-  console.log('User email:', user?.email);
-  const isAdmin = true; // user?.email && ADMIN_EMAILS.includes(user.email);
+  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
 
   // Load players for the current week
   const {
@@ -71,7 +70,7 @@ function AppContent() {
           roster={roster}
           players={players}
           usedPlayers={usedPlayers}
-          loading={rosterLoading || playersLoading}
+          loading={rosterLoading || playersLoading || weekLoading}
           error={rosterError}
           currentWeek={currentWeek}
           getPlayerById={getPlayerById}
@@ -87,6 +86,8 @@ function AppContent() {
         />
       ) : (
         <div className="space-y-6">
+          <AdminWeek />
+          <AdminRosterLock />
           <AdminScoringRules />
           <AdminStats />
           <AdminSync />

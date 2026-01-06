@@ -130,6 +130,48 @@ export async function lockRoster(userId: string, week: number): Promise<boolean>
   }
 }
 
+// Admin function to lock all rosters for a week
+export async function lockAllRostersForWeek(week: number): Promise<{ locked: number; errors: number }> {
+  const results = { locked: 0, errors: 0 };
+
+  try {
+    const rosters = await getAllRostersForWeek(week);
+
+    for (const roster of rosters) {
+      if (roster.locked) {
+        results.locked++; // Already locked
+        continue;
+      }
+
+      try {
+        // Lock the roster
+        await lockRoster(roster.odId, week);
+
+        // Get all player IDs from the roster
+        const playerIds = [
+          roster.qb, roster.rb1, roster.rb2,
+          roster.wr1, roster.wr2, roster.wr3,
+          roster.te, roster.dst, roster.k,
+        ].filter((id): id is string => id !== null);
+
+        // Add players to used list
+        if (playerIds.length > 0) {
+          await addUsedPlayers(roster.odId, playerIds);
+        }
+
+        results.locked++;
+      } catch (err) {
+        console.error(`Error locking roster for ${roster.odId}:`, err);
+        results.errors++;
+      }
+    }
+  } catch (error) {
+    console.error('Error locking all rosters:', error);
+  }
+
+  return results;
+}
+
 // Used players functions
 export async function getUsedPlayers(userId: string): Promise<string[]> {
   try {
@@ -563,6 +605,56 @@ export function subscribeToScoringRules(
       callback(rules as ScoringRules);
     } else {
       callback(PPR_SCORING);
+    }
+  });
+}
+
+// ============================================
+// Current Week Override functions
+// ============================================
+
+// Save current week override (null means use date-based logic)
+export async function saveCurrentWeekOverride(week: number | null): Promise<boolean> {
+  try {
+    const configRef = doc(db, 'config', 'currentWeek');
+    await setDoc(configRef, {
+      week,
+      updatedAt: new Date(),
+    });
+    console.log(`Saved current week override: ${week === null ? 'auto (date-based)' : `Week ${week}`}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving current week override:', error);
+    return false;
+  }
+}
+
+// Get current week override (returns null if not set or set to auto)
+export async function getCurrentWeekOverride(): Promise<number | null> {
+  try {
+    const configRef = doc(db, 'config', 'currentWeek');
+    const configSnap = await getDoc(configRef);
+
+    if (configSnap.exists()) {
+      return configSnap.data().week as number | null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting current week override:', error);
+    return null;
+  }
+}
+
+// Subscribe to current week override changes (real-time)
+export function subscribeToCurrentWeek(
+  callback: (week: number | null) => void
+): () => void {
+  const configRef = doc(db, 'config', 'currentWeek');
+  return onSnapshot(configRef, (doc) => {
+    if (doc.exists()) {
+      callback(doc.data().week as number | null);
+    } else {
+      callback(null);
     }
   });
 }

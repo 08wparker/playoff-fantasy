@@ -328,19 +328,19 @@ export function AdminStats() {
       </div>
 
       {/* Spreadsheet */}
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[600px]">
         <table className="w-full">
-          <thead className="bg-gray-50 sticky top-0">
+          <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
             <tr>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase sticky left-0 bg-gray-50">
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-600 uppercase sticky left-0 bg-gray-50 z-20">
                 Player
               </th>
               {statFields.map(field => (
-                <th key={field} className="py-2 px-1 text-center text-xs font-semibold text-gray-600 uppercase">
+                <th key={field} className="py-2 px-1 text-center text-xs font-semibold text-gray-600 uppercase bg-gray-50">
                   {STAT_LABELS[field]}
                 </th>
               ))}
-              <th className="py-2 px-2 text-center text-xs font-semibold text-gray-600 uppercase">
+              <th className="py-2 px-2 text-center text-xs font-semibold text-gray-600 uppercase bg-gray-50">
                 Action
               </th>
             </tr>
