@@ -29,7 +29,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState<'roster' | 'scores' | 'admin'>('roster');
   const { week: currentWeek, weekName, loading: weekLoading } = useCurrentWeek();
 
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
+  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
 
   // Load players for the current week
   const {
@@ -46,7 +46,6 @@ function AppContent() {
     error: rosterError,
     setPlayerForSlot,
     saveCurrentRoster,
-    lockCurrentRoster,
   } = useRoster(user?.uid || null, currentWeek);
 
   // Load scoreboard (multi-week standings)

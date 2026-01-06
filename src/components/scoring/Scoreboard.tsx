@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PlayoffWeekName, Player, PlayerStats, User, WeeklyRoster } from '../../types';
-import { PLAYOFF_WEEK_NAMES, PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
+import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 import { formatPoints, calculatePoints } from '../../services/scoring';
 import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers } from '../../services/firebase';
 import type { MultiWeekStanding } from '../../hooks/useScoring';

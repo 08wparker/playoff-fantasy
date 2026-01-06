@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { User, WeeklyRoster, Player, RosterScore, PlayerScore, PlayerStats, PlayoffWeekName } from '../types';
-import { PLAYOFF_WEEK_NAMES, PLAYOFF_WEEK_DISPLAY_NAMES } from '../types';
+import { PLAYOFF_WEEK_NAMES } from '../types';
 import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek } from '../services/firebase';
 import { calculatePoints } from '../services/scoring';
 
@@ -183,7 +183,6 @@ export function useMultiWeekStandings(
 
     try {
       const users = await getAllUsers();
-      const weeks: PlayoffWeekName[] = ['wildcard', 'divisional', 'championship', 'superbowl'];
 
       // Initialize standings for each user
       const userStandings = new Map<string, MultiWeekStanding>();
