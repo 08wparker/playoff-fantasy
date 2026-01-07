@@ -178,6 +178,11 @@ export function RosterBuilder({
           <li>• <strong>3rd Place (Cumulative):</strong> 10% of pot</li>
           <li>• <strong>Weekly High Score:</strong> 5% of pot each week</li>
         </ul>
+        <div className="mt-3 pt-3 border-t border-primary-200">
+          <p className="text-sm text-primary-700">
+            <strong>Optional buy-in:</strong> $50 via Venmo or Zelle to williamfparker@gmail.com
+          </p>
+        </div>
       </div>
 
       {/* Scoring Rubric */}
