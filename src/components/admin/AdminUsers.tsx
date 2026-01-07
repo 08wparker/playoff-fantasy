@@ -1,31 +1,47 @@
 import { useState, useEffect } from 'react';
-import { getAllUsers } from '../../services/firebase';
+import { getAllUsers, updateUserPaymentStatus } from '../../services/firebase';
 import type { User } from '../../types';
 
 export function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadUsers() {
-      setLoading(true);
-      const allUsers = await getAllUsers();
-      setUsers(allUsers);
-      setLoading(false);
-    }
     loadUsers();
   }, []);
+
+  async function loadUsers() {
+    setLoading(true);
+    const allUsers = await getAllUsers();
+    setUsers(allUsers);
+    setLoading(false);
+  }
 
   const emails = users
     .map(u => u.email)
     .filter((email): email is string => !!email);
+
+  const paidCount = users.filter(u => u.hasPaid).length;
+  const totalPot = paidCount * 50;
 
   const handleCopyEmails = async () => {
     const emailList = emails.join(', ');
     await navigator.clipboard.writeText(emailList);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleTogglePayment = async (userId: string, currentStatus: boolean) => {
+    setUpdating(userId);
+    const success = await updateUserPaymentStatus(userId, !currentStatus);
+    if (success) {
+      setUsers(users.map(u =>
+        u.uid === userId ? { ...u, hasPaid: !currentStatus } : u
+      ));
+    }
+    setUpdating(null);
   };
 
   if (loading) {
@@ -42,7 +58,11 @@ export function AdminUsers() {
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-gray-900">Registered Users</h2>
-        <span className="text-sm text-gray-500">{users.length} users</span>
+        <div className="text-right">
+          <span className="text-sm text-gray-500">{users.length} users</span>
+          <span className="mx-2 text-gray-300">|</span>
+          <span className="text-sm font-medium text-green-600">{paidCount} paid (${totalPot} pot)</span>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -79,6 +99,17 @@ export function AdminUsers() {
                 </p>
                 <p className="text-xs text-gray-500 truncate">{user.email || 'No email'}</p>
               </div>
+              <button
+                onClick={() => handleTogglePayment(user.uid, !!user.hasPaid)}
+                disabled={updating === user.uid}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                  user.hasPaid
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                } disabled:opacity-50`}
+              >
+                {updating === user.uid ? '...' : user.hasPaid ? 'Paid ✓' : 'Not Paid'}
+              </button>
             </div>
           ))}
         </div>

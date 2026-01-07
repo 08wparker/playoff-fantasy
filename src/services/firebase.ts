@@ -309,6 +309,18 @@ export async function getAllUsers(): Promise<User[]> {
   }
 }
 
+// Update user payment status
+export async function updateUserPaymentStatus(userId: string, hasPaid: boolean): Promise<boolean> {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { hasPaid });
+    return true;
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    return false;
+  }
+}
+
 // Get all rosters for a week
 export async function getAllRostersForWeek(week: number): Promise<WeeklyRoster[]> {
   try {
