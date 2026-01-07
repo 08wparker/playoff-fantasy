@@ -13,6 +13,7 @@ import { AdminStats } from './components/admin/AdminStats';
 import { AdminScoringRules } from './components/admin/AdminScoringRules';
 import { AdminWeek } from './components/admin/AdminWeek';
 import { AdminRosterLock } from './components/admin/AdminRosterLock';
+import { AdminUsers } from './components/admin/AdminUsers';
 
 // Admin email addresses
 const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
@@ -88,6 +89,7 @@ function AppContent() {
         <div className="space-y-6">
           <AdminWeek />
           <AdminRosterLock />
+          <AdminUsers />
           <AdminScoringRules />
           <AdminStats />
           <AdminSync />
