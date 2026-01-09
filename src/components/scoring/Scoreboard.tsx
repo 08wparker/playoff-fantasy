@@ -257,6 +257,9 @@ function OverallStandings({
                         <img src={entry.user.photoURL} alt="" className="w-8 h-8 rounded-full" />
                       )}
                       <span className="font-medium text-gray-900">{entry.user.displayName || 'Anonymous'}</span>
+                      {entry.user.hasPaid && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">$</span>
+                      )}
                     </div>
                   </td>
                   {WEEKS.map(week => (
@@ -416,7 +419,12 @@ function WeekStandings({
                   <img src={entry.user.photoURL} alt="" className="w-10 h-10 rounded-full" />
                 )}
                 <div className="text-left">
-                  <p className="font-medium text-gray-900">{entry.user.displayName || 'Anonymous'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">{entry.user.displayName || 'Anonymous'}</p>
+                    {entry.user.hasPaid && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded">$</span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500">
                     {entry.roster.locked ? 'Locked' : 'Not locked'}
                     {isOwnRoster && ' (You)'}
