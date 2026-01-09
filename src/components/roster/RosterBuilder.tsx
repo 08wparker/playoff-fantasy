@@ -158,8 +158,15 @@ export function RosterBuilder({
         </button>
       )}
 
+      {/* Disclaimer */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
+        <p className="text-sm text-amber-800">
+          <strong>Note:</strong> Rankings are from Fantasy Pros and not real time. You must verify your player will start. If you want to play a player not listed, please contact LM.
+        </p>
+      </div>
+
       {/* Rules */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <h3 className="font-semibold text-gray-800 mb-2">Rules</h3>
         <ul className="text-sm text-gray-600 space-y-2">
           <li>• <strong>Roster:</strong> 1 QB, 2 RB, 3 WR, 1 TE, 1 D/ST, 1 K</li>
