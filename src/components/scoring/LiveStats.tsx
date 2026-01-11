@@ -34,6 +34,8 @@ interface PlayerLiveStats {
   pointsAllowed: number;
   sacks: number;
   interceptions: number;
+  fumbleRecoveries: number;
+  defensiveTDs: number;
 }
 
 interface KickerLiveStats {
@@ -179,6 +181,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               pointsAllowed: 0,
               sacks: 0,
               interceptions: 0,
+              fumbleRecoveries: 0,
+              defensiveTDs: 0,
             });
           }
         }
@@ -203,6 +207,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
             pointsAllowed: defense.pointsAllowed,
             sacks: defense.sacks,
             interceptions: defense.interceptions,
+            fumbleRecoveries: defense.fumbleRecoveries,
+            defensiveTDs: defense.defensiveTDs,
           });
         }
 
@@ -513,6 +519,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
                   <th className="py-2 px-3 text-right font-medium text-gray-600">Pts Allowed</th>
                   <th className="py-2 px-3 text-right font-medium text-gray-600">Sacks</th>
                   <th className="py-2 px-3 text-right font-medium text-gray-600">INTs</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">Fum Rec</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">Def TD</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -535,6 +543,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
                     <td className="py-2 px-3 text-right">{player.pointsAllowed}</td>
                     <td className="py-2 px-3 text-right">{player.sacks}</td>
                     <td className="py-2 px-3 text-right">{player.interceptions}</td>
+                    <td className="py-2 px-3 text-right">{player.fumbleRecoveries}</td>
+                    <td className="py-2 px-3 text-right">{player.defensiveTDs > 0 ? player.defensiveTDs : '-'}</td>
                   </tr>
                 ))}
               </tbody>
