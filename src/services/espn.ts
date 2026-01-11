@@ -298,34 +298,47 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
   }
 
   // Parse team defense stats
+  // First pass: collect each team's offensive turnovers (INTs thrown, fumbles lost)
+  const teamTurnovers: Record<string, { intsThrown: number; fumblesLost: number; sacksAllowed: number }> = {};
+
   for (const teamStats of boxscore?.teams || []) {
     const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
-    const opponentScore = teamAbbr === homeAbbr
-      ? parseInt(awayTeam?.score || '0')
-      : parseInt(homeTeam?.score || '0');
+    teamTurnovers[teamAbbr] = { intsThrown: 0, fumblesLost: 0, sacksAllowed: 0 };
 
-    const teamDefense = {
-      team: teamAbbr as NFLTeam,
-      pointsAllowed: opponentScore,
-      sacks: 0,
-      interceptions: 0,
-      fumbleRecoveries: 0,
-      defensiveTDs: 0,
-    };
-
-    // Parse team statistics for defensive stats
     for (const stat of teamStats.statistics || []) {
       const label = stat.label?.toLowerCase() || stat.name?.toLowerCase() || '';
       const value = parseFloat(stat.displayValue) || 0;
 
-      if (label.includes('sack') && !label.includes('allowed')) {
-        teamDefense.sacks = value;
-      } else if (label.includes('interception') || label === 'int') {
-        teamDefense.interceptions = value;
-      } else if (label.includes('fumble') && label.includes('rec')) {
-        teamDefense.fumbleRecoveries = value;
+      // These are offensive stats (turnovers committed by this team)
+      if (label.includes('interception') || label === 'int') {
+        teamTurnovers[teamAbbr].intsThrown = value;
+      } else if (label.includes('fumble') && label.includes('lost')) {
+        teamTurnovers[teamAbbr].fumblesLost = value;
+      } else if (label.includes('sack') && label.includes('allowed')) {
+        teamTurnovers[teamAbbr].sacksAllowed = value;
       }
     }
+  }
+
+  // Second pass: build defense stats using opponent's turnovers
+  for (const teamStats of boxscore?.teams || []) {
+    const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
+    const opponentAbbr = teamAbbr === homeAbbr ? awayAbbr : homeAbbr;
+    const opponentScore = teamAbbr === homeAbbr
+      ? parseInt(awayTeam?.score || '0')
+      : parseInt(homeTeam?.score || '0');
+
+    // Get opponent's turnovers (which are this team's defensive stats)
+    const opponentTurnovers = teamTurnovers[opponentAbbr] || { intsThrown: 0, fumblesLost: 0, sacksAllowed: 0 };
+
+    const teamDefense = {
+      team: teamAbbr as NFLTeam,
+      pointsAllowed: opponentScore,
+      sacks: opponentTurnovers.sacksAllowed, // Sacks we recorded = sacks opponent allowed
+      interceptions: opponentTurnovers.intsThrown, // INTs we caught = INTs opponent threw
+      fumbleRecoveries: opponentTurnovers.fumblesLost, // Fumbles we recovered = fumbles opponent lost
+      defensiveTDs: 0,
+    };
 
     defenseStats.push(teamDefense);
   }
