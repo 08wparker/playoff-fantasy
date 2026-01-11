@@ -8,12 +8,14 @@ import { GoogleSignIn } from './components/auth/GoogleSignIn';
 import { Layout } from './components/layout/Layout';
 import { RosterBuilder } from './components/roster/RosterBuilder';
 import { Scoreboard } from './components/scoring/Scoreboard';
+import { LiveStats } from './components/scoring/LiveStats';
 import { AdminSync } from './components/admin/AdminSync';
 import { AdminStats } from './components/admin/AdminStats';
 import { AdminScoringRules } from './components/admin/AdminScoringRules';
 import { AdminWeek } from './components/admin/AdminWeek';
 import { AdminRosterLock } from './components/admin/AdminRosterLock';
 import { AdminUsers } from './components/admin/AdminUsers';
+import { AdminLiveStats } from './components/admin/AdminLiveStats';
 
 // Admin email addresses
 const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
@@ -27,7 +29,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
 // Main app content (when authenticated)
 function AppContent() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'roster' | 'scores' | 'admin'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'scores' | 'admin'>('roster');
   const { week: currentWeek, weekName, loading: weekLoading } = useCurrentWeek();
 
   const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
@@ -77,6 +79,8 @@ function AppContent() {
           onSetPlayer={setPlayerForSlot}
           onSave={saveCurrentRoster}
         />
+      ) : activeTab === 'live' ? (
+        <LiveStats currentWeek={currentWeek} />
       ) : activeTab === 'scores' ? (
         <Scoreboard
           standings={standings}
@@ -89,6 +93,7 @@ function AppContent() {
         <div className="space-y-6">
           <AdminWeek />
           <AdminRosterLock />
+          <AdminLiveStats currentWeek={currentWeek} />
           <AdminUsers />
           <AdminScoringRules />
           <AdminStats />

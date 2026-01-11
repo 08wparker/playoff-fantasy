@@ -1,6 +1,6 @@
 interface TabNavProps {
-  activeTab: 'roster' | 'scores' | 'admin';
-  onTabChange: (tab: 'roster' | 'scores' | 'admin') => void;
+  activeTab: 'roster' | 'live' | 'scores' | 'admin';
+  onTabChange: (tab: 'roster' | 'live' | 'scores' | 'admin') => void;
   showAdmin?: boolean;
   weekName?: string;
 }
@@ -19,6 +19,16 @@ export function TabNav({ activeTab, onTabChange, showAdmin = false, weekName }: 
             }`}
           >
             Set Roster {weekName ? `(${weekName})` : ''}
+          </button>
+          <button
+            onClick={() => onTabChange('live')}
+            className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'live'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Live Stats
           </button>
           <button
             onClick={() => onTabChange('scores')}

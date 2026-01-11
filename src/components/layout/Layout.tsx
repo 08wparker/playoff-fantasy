@@ -6,8 +6,8 @@ interface LayoutProps {
   children: ReactNode;
   currentWeek: number;
   weekName: string;
-  activeTab: 'roster' | 'scores' | 'admin';
-  onTabChange: (tab: 'roster' | 'scores' | 'admin') => void;
+  activeTab: 'roster' | 'live' | 'scores' | 'admin';
+  onTabChange: (tab: 'roster' | 'live' | 'scores' | 'admin') => void;
   showAdmin?: boolean;
 }
 
