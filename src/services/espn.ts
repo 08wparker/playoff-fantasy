@@ -298,27 +298,34 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
   }
 
   // Parse team defense stats
-  // First pass: collect each team's offensive turnovers (INTs thrown, fumbles lost)
-  const teamTurnovers: Record<string, { intsThrown: number; fumblesLost: number }> = {};
+  // First pass: collect each team's offensive stats that need to be swapped
+  // (INTs thrown, fumbles lost, times sacked)
+  const teamOffensiveStats: Record<string, { intsThrown: number; fumblesLost: number; timesSacked: number }> = {};
 
   for (const teamStats of boxscore?.teams || []) {
     const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
-    teamTurnovers[teamAbbr] = { intsThrown: 0, fumblesLost: 0 };
+    teamOffensiveStats[teamAbbr] = { intsThrown: 0, fumblesLost: 0, timesSacked: 0 };
 
     for (const stat of teamStats.statistics || []) {
       const label = stat.label?.toLowerCase() || stat.name?.toLowerCase() || '';
-      const value = parseFloat(stat.displayValue) || 0;
+      const displayValue = stat.displayValue || '';
 
-      // These are offensive turnovers committed by this team
-      if (label.includes('interception') || label === 'int') {
-        teamTurnovers[teamAbbr].intsThrown = value;
-      } else if (label.includes('fumble') && label.includes('lost')) {
-        teamTurnovers[teamAbbr].fumblesLost = value;
+      // These are offensive stats (turnovers/sacks allowed by this team)
+      if (label.includes('interceptions thrown')) {
+        teamOffensiveStats[teamAbbr].intsThrown = parseFloat(displayValue) || 0;
+      } else if (label.includes('fumbles lost')) {
+        teamOffensiveStats[teamAbbr].fumblesLost = parseFloat(displayValue) || 0;
+      } else if (label.includes('sacks-yards lost') || label === 'sacks-yards lost') {
+        // Format: "2-14" means 2 sacks for 14 yards lost
+        const sackMatch = displayValue.match(/^(\d+)-/);
+        if (sackMatch) {
+          teamOffensiveStats[teamAbbr].timesSacked = parseInt(sackMatch[1]) || 0;
+        }
       }
     }
   }
 
-  // Second pass: build defense stats
+  // Second pass: build defense stats using opponent's offensive stats
   for (const teamStats of boxscore?.teams || []) {
     const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
     const opponentAbbr = teamAbbr === homeAbbr ? awayAbbr : homeAbbr;
@@ -326,26 +333,25 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
       ? parseInt(awayTeam?.score || '0')
       : parseInt(homeTeam?.score || '0');
 
-    // Get opponent's turnovers (which are this team's defensive stats)
-    const opponentTurnovers = teamTurnovers[opponentAbbr] || { intsThrown: 0, fumblesLost: 0 };
+    // Get opponent's offensive stats (which become this team's defensive stats)
+    const opponentStats = teamOffensiveStats[opponentAbbr] || { intsThrown: 0, fumblesLost: 0, timesSacked: 0 };
 
     const teamDefense = {
       team: teamAbbr as NFLTeam,
       pointsAllowed: opponentScore,
-      sacks: 0,
-      interceptions: opponentTurnovers.intsThrown, // INTs we caught = INTs opponent threw
-      fumbleRecoveries: opponentTurnovers.fumblesLost, // Fumbles we recovered = fumbles opponent lost
+      sacks: opponentStats.timesSacked, // Sacks we recorded = times opponent was sacked
+      interceptions: opponentStats.intsThrown, // INTs we caught = INTs opponent threw
+      fumbleRecoveries: opponentStats.fumblesLost, // Fumbles we recovered = fumbles opponent lost
       defensiveTDs: 0,
     };
 
-    // Parse this team's direct defensive stats (sacks, defensive TDs)
+    // Parse defensive TDs (this is a direct stat, not swapped)
     for (const stat of teamStats.statistics || []) {
       const label = stat.label?.toLowerCase() || stat.name?.toLowerCase() || '';
       const value = parseFloat(stat.displayValue) || 0;
 
-      // Sacks are a direct defensive stat (not swapped)
-      if (label === 'sacks' || (label.includes('sack') && !label.includes('allowed') && !label.includes('yard'))) {
-        teamDefense.sacks = value;
+      if (label.includes('defensive') && label.includes('td')) {
+        teamDefense.defensiveTDs = value;
       }
     }
 
