@@ -320,7 +320,7 @@ function PlayerStatsDisplay({ stats, position }: { stats: PlayerStats; position:
     if (stats.xpMissed > 0) statItems.push({ label: 'XP Miss', value: `${stats.xpMissed}` });
   }
   // D/ST stats
-  else if (position === 'D/ST') {
+  else if (position === 'D/ST' || position === 'DST') {
     statItems.push({ label: 'Pts Allowed', value: `${stats.pointsAllowed}` });
     if (stats.sacks > 0) statItems.push({ label: 'Sacks', value: `${stats.sacks}` });
     if (stats.defensiveInterceptions > 0) statItems.push({ label: 'INT', value: `${stats.defensiveInterceptions}` });
