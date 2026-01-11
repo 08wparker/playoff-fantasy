@@ -6,6 +6,7 @@ import {
   fetchGameBoxScore,
   toPlayerStats,
   toDefenseStats,
+  toKickerStats,
   type ESPNGame,
   type ESPNBoxScore,
 } from '../../services/espn';
@@ -35,10 +36,27 @@ interface PlayerLiveStats {
   interceptions: number;
 }
 
+interface KickerLiveStats {
+  espnId: string;
+  espnName: string;
+  espnTeam: string;
+  headshot?: string;
+  fantasyPoints: number;
+  fg0_39: number;
+  fg40_49: number;
+  fg50Plus: number;
+  fgMade: number;
+  fgMissed: number;
+  xpMade: number;
+  xpMissed: number;
+  longFG: number;
+}
+
 export function LiveStats({ currentWeek }: LiveStatsProps) {
   const [games, setGames] = useState<ESPNGame[]>([]);
   const [boxScores, setBoxScores] = useState<ESPNBoxScore[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerLiveStats[]>([]);
+  const [kickerStats, setKickerStats] = useState<KickerLiveStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -113,6 +131,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
 
       // Build player stats list
       const allStats: PlayerLiveStats[] = [];
+      const allKickerStats: KickerLiveStats[] = [];
 
       // Player stats
       for (const boxScore of newBoxScores) {
@@ -186,11 +205,33 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
             interceptions: defense.interceptions,
           });
         }
+
+        // Kicker stats
+        for (const kicker of boxScore.kickerStats) {
+          const stats = toKickerStats(kicker, '', currentWeek);
+          allKickerStats.push({
+            espnId: kicker.espnId,
+            espnName: kicker.name,
+            espnTeam: kicker.team,
+            headshot: kicker.headshot,
+            fantasyPoints: calculatePoints(stats, undefined, 'K'),
+            fg0_39: kicker.fg0_39,
+            fg40_49: kicker.fg40_49,
+            fg50Plus: kicker.fg50Plus,
+            fgMade: kicker.fgMade,
+            fgMissed: kicker.fgMissed,
+            xpMade: kicker.xpMade,
+            xpMissed: kicker.xpMissed,
+            longFG: kicker.longFG,
+          });
+        }
       }
 
       // Sort by fantasy points
       allStats.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
+      allKickerStats.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
       setPlayerStats(allStats);
+      setKickerStats(allKickerStats);
       setLastFetch(new Date());
 
       // Auto-sync matched players to Firebase
@@ -237,6 +278,41 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
           }
         }
       }
+      // Sync kicker stats to Firebase
+      for (const kicker of allKickerStats) {
+        // Find matching kicker in our collection
+        const matchedKicker = findPlayer(kicker.espnName, kicker.espnTeam);
+
+        if (matchedKicker) {
+          try {
+            await savePlayerStats(weekName, matchedKicker.id, {
+              passingYards: 0,
+              passingTDs: 0,
+              interceptions: 0,
+              rushingYards: 0,
+              rushingTDs: 0,
+              receptions: 0,
+              receivingYards: 0,
+              receivingTDs: 0,
+              fg0_39: kicker.fg0_39,
+              fg40_49: kicker.fg40_49,
+              fg50Plus: kicker.fg50Plus,
+              fgMissed: kicker.fgMissed,
+              xpMade: kicker.xpMade,
+              xpMissed: kicker.xpMissed,
+              pointsAllowed: 0,
+              sacks: 0,
+              defensiveInterceptions: 0,
+              fumbleRecoveries: 0,
+              defensiveTDs: 0,
+            });
+            synced++;
+          } catch (err) {
+            console.error(`Error syncing kicker ${kicker.espnName}:`, err);
+          }
+        }
+      }
+
       setSyncCount(synced);
       setLastSync(new Date());
     } catch (err) {
@@ -262,7 +338,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
   // Split stats by category
   const offensiveStats = playerStats.filter(p => ['QB', 'RB', 'WR', 'TE'].includes(p.position));
   const defenseStats = playerStats.filter(p => p.position === 'DST');
-  const kickerStats = playerStats.filter(p => p.position === 'K');
+  // Note: kickerStats comes from state (populated from ESPNKickerStats), not filtered from playerStats
 
   // Get game status badge
   const getGameStatusBadge = (game: ESPNGame) => {
@@ -483,19 +559,25 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
                   <th className="py-2 px-3 text-left font-medium text-gray-600">Player</th>
                   <th className="py-2 px-3 text-left font-medium text-gray-600">Team</th>
                   <th className="py-2 px-3 text-right font-medium text-gray-600">Fantasy Pts</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 0-39</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 40-49</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 50+</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG Miss</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">XP</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">Long</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {kickerStats.map((player, idx) => (
+                {kickerStats.map((kicker, idx) => (
                   <tr
-                    key={`${player.espnName}-k-${idx}`}
+                    key={`${kicker.espnName}-k-${idx}`}
                     className="hover:bg-gray-50"
                   >
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-2">
-                        {player.headshot ? (
+                        {kicker.headshot ? (
                           <img
-                            src={player.headshot}
+                            src={kicker.headshot}
                             alt=""
                             className="w-8 h-8 rounded-full object-cover"
                           />
@@ -504,12 +586,30 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
                             K
                           </div>
                         )}
-                        <span className="font-medium">{player.espnName}</span>
+                        <span className="font-medium">{kicker.espnName}</span>
                       </div>
                     </td>
-                    <td className="py-2 px-3">{player.espnTeam}</td>
+                    <td className="py-2 px-3">{kicker.espnTeam}</td>
                     <td className="py-2 px-3 text-right font-bold text-primary-700">
-                      {player.fantasyPoints.toFixed(2)}
+                      {kicker.fantasyPoints.toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.fg0_39 > 0 ? kicker.fg0_39 : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.fg40_49 > 0 ? kicker.fg40_49 : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-green-700 font-medium">
+                      {kicker.fg50Plus > 0 ? kicker.fg50Plus : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-red-600">
+                      {kicker.fgMissed > 0 ? kicker.fgMissed : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.xpMade}/{kicker.xpMade + kicker.xpMissed}
+                    </td>
+                    <td className="py-2 px-3 text-right text-gray-500">
+                      {kicker.longFG > 0 ? `${kicker.longFG}` : '-'}
                     </td>
                   </tr>
                 ))}

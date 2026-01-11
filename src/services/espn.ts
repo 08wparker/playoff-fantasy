@@ -67,6 +67,22 @@ export interface ESPNPlayerStats {
   fantasyPoints?: number;
 }
 
+export interface ESPNKickerStats {
+  espnId: string;
+  name: string;
+  team: NFLTeam;
+  headshot?: string;
+  fg0_39: number;
+  fg40_49: number;
+  fg50Plus: number;
+  fgMissed: number;
+  xpMade: number;
+  xpMissed: number;
+  fgAttempts: number;
+  fgMade: number;
+  longFG: number;
+}
+
 export interface ESPNBoxScore {
   gameId: string;
   gameName: string;
@@ -78,6 +94,7 @@ export interface ESPNBoxScore {
   homeScore: number;
   awayScore: number;
   players: ESPNPlayerStats[];
+  kickerStats: ESPNKickerStats[];
   defenseStats: {
     team: NFLTeam;
     pointsAllowed: number;
@@ -120,6 +137,7 @@ export async function fetchGameBoxScore(gameId: string): Promise<ESPNBoxScore | 
 function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
   const competition = data.header?.competitions?.[0];
   const boxscore = data.boxscore;
+  const scoringPlays = data.scoringPlays || [];
 
   // Get team info
   const competitors = competition?.competitors || [];
@@ -131,8 +149,26 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
 
   const status = competition?.status?.type;
 
+  // Parse FG distances from scoring plays
+  // Format: "Matt Prater 50 Yd Field Goal"
+  const fgDistances: { kickerName: string; team: string; distance: number }[] = [];
+  for (const play of scoringPlays) {
+    if (play.scoringType?.name === 'field-goal' && play.text) {
+      const match = play.text.match(/^(.+?)\s+(\d+)\s+Yd\s+Field\s+Goal/i);
+      if (match) {
+        const teamAbbr = ESPN_TEAM_MAP[play.team?.abbreviation] || play.team?.abbreviation;
+        fgDistances.push({
+          kickerName: match[1].trim(),
+          team: teamAbbr,
+          distance: parseInt(match[2]),
+        });
+      }
+    }
+  }
+
   // Parse player stats from box score
   const players: ESPNPlayerStats[] = [];
+  const kickerStats: ESPNKickerStats[] = [];
   const defenseStats: ESPNBoxScore['defenseStats'] = [];
 
   // Process each team's player stats
@@ -143,6 +179,77 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
     for (const category of teamStats.statistics || []) {
       const categoryName = category.name;
       const keys = category.keys || [];
+
+      // Handle kicking stats separately for better FG distance tracking
+      if (categoryName.toLowerCase() === 'kicking') {
+        for (const athlete of category.athletes || []) {
+          const athleteInfo = athlete.athlete;
+          const stats = athlete.stats || [];
+
+          // Parse FG made/attempted from box score
+          // Format: "2/2" for fieldGoalsMade/fieldGoalAttempts
+          const fgIdx = keys.indexOf('fieldGoalsMade/fieldGoalAttempts');
+          const fgStr = fgIdx >= 0 ? stats[fgIdx] : '0/0';
+          const [fgMadeStr, fgAttStr] = fgStr.split('/');
+          const fgMade = parseInt(fgMadeStr) || 0;
+          const fgAttempts = parseInt(fgAttStr) || 0;
+
+          // Parse XP made/attempted
+          const xpIdx = keys.indexOf('extraPointsMade/extraPointAttempts');
+          const xpStr = xpIdx >= 0 ? stats[xpIdx] : '0/0';
+          const [xpMadeStr, xpAttStr] = xpStr.split('/');
+          const xpMade = parseInt(xpMadeStr) || 0;
+          const xpAttempts = parseInt(xpAttStr) || 0;
+
+          // Parse longest FG
+          const longIdx = keys.indexOf('longFieldGoalMade');
+          const longFG = longIdx >= 0 ? parseInt(stats[longIdx]) || 0 : 0;
+
+          // Get FG distances for this kicker from scoring plays
+          const kickerFGs = fgDistances.filter(
+            fg => fg.kickerName.toLowerCase() === athleteInfo.displayName.toLowerCase() ||
+                  fg.kickerName.toLowerCase().includes(athleteInfo.lastName?.toLowerCase() || '')
+          );
+
+          // Categorize FGs by distance
+          let fg0_39 = 0;
+          let fg40_49 = 0;
+          let fg50Plus = 0;
+
+          for (const fg of kickerFGs) {
+            if (fg.distance >= 50) {
+              fg50Plus++;
+            } else if (fg.distance >= 40) {
+              fg40_49++;
+            } else {
+              fg0_39++;
+            }
+          }
+
+          // If we found fewer FGs in scoring plays than box score shows, distribute remainder to 0-39
+          const foundFGs = fg0_39 + fg40_49 + fg50Plus;
+          if (foundFGs < fgMade) {
+            fg0_39 += fgMade - foundFGs;
+          }
+
+          kickerStats.push({
+            espnId: athleteInfo.id,
+            name: athleteInfo.displayName,
+            team: teamAbbr as NFLTeam,
+            headshot: athleteInfo.headshot?.href,
+            fg0_39,
+            fg40_49,
+            fg50Plus,
+            fgMissed: fgAttempts - fgMade,
+            xpMade,
+            xpMissed: xpAttempts - xpMade,
+            fgAttempts,
+            fgMade,
+            longFG,
+          });
+        }
+        continue; // Skip normal player processing for kickers
+      }
 
       for (const athlete of category.athletes || []) {
         const athleteInfo = athlete.athlete;
@@ -234,6 +341,7 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
     homeScore: parseInt(homeTeam?.score || '0'),
     awayScore: parseInt(awayTeam?.score || '0'),
     players,
+    kickerStats,
     defenseStats,
   };
 }
@@ -426,5 +534,36 @@ export function toDefenseStats(
     defensiveInterceptions: defense.interceptions,
     fumbleRecoveries: defense.fumbleRecoveries,
     defensiveTDs: defense.defensiveTDs,
+  };
+}
+
+// Create kicker PlayerStats from ESPNKickerStats
+export function toKickerStats(
+  kicker: ESPNKickerStats,
+  playerId: string,
+  weekNumber: number
+): PlayerStats {
+  return {
+    playerId,
+    week: weekNumber,
+    passingYards: 0,
+    passingTDs: 0,
+    interceptions: 0,
+    rushingYards: 0,
+    rushingTDs: 0,
+    receptions: 0,
+    receivingYards: 0,
+    receivingTDs: 0,
+    fg0_39: kicker.fg0_39,
+    fg40_49: kicker.fg40_49,
+    fg50Plus: kicker.fg50Plus,
+    fgMissed: kicker.fgMissed,
+    xpMade: kicker.xpMade,
+    xpMissed: kicker.xpMissed,
+    pointsAllowed: 0,
+    sacks: 0,
+    defensiveInterceptions: 0,
+    fumbleRecoveries: 0,
+    defensiveTDs: 0,
   };
 }

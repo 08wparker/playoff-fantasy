@@ -7,6 +7,7 @@ import {
   matchPlayer,
   toPlayerStats,
   toDefenseStats,
+  toKickerStats,
   type ESPNGame,
   type ESPNBoxScore,
 } from '../../services/espn';
@@ -26,10 +27,26 @@ interface MatchedPlayerStats {
   isDefense: boolean;
 }
 
+interface MatchedKickerStats {
+  espnName: string;
+  espnTeam: string;
+  matchedPlayer: Player | null;
+  stats: PlayerStats;
+  fantasyPoints: number;
+  fg0_39: number;
+  fg40_49: number;
+  fg50Plus: number;
+  fgMissed: number;
+  xpMade: number;
+  xpMissed: number;
+  longFG: number;
+}
+
 export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
   const [games, setGames] = useState<ESPNGame[]>([]);
   const [boxScores, setBoxScores] = useState<ESPNBoxScore[]>([]);
   const [matchedStats, setMatchedStats] = useState<MatchedPlayerStats[]>([]);
+  const [kickerStats, setKickerStats] = useState<MatchedKickerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -73,6 +90,7 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
 
       // Match ESPN players to our players
       const matched: MatchedPlayerStats[] = [];
+      const matchedKickers: MatchedKickerStats[] = [];
 
       // Player stats
       for (const boxScore of newBoxScores) {
@@ -130,11 +148,42 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
             isDefense: true,
           });
         }
+
+        // Kicker stats
+        for (const kicker of boxScore.kickerStats) {
+          // Find kicker in our roster
+          const matchedKicker = players.find(
+            p => p.team === kicker.team && p.position === 'K'
+          );
+
+          const stats = toKickerStats(
+            kicker,
+            matchedKicker?.id || `kicker-${kicker.team}`,
+            currentWeek
+          );
+
+          matchedKickers.push({
+            espnName: kicker.name,
+            espnTeam: kicker.team,
+            matchedPlayer: matchedKicker || null,
+            stats,
+            fantasyPoints: calculatePoints(stats, undefined, 'K'),
+            fg0_39: kicker.fg0_39,
+            fg40_49: kicker.fg40_49,
+            fg50Plus: kicker.fg50Plus,
+            fgMissed: kicker.fgMissed,
+            xpMade: kicker.xpMade,
+            xpMissed: kicker.xpMissed,
+            longFG: kicker.longFG,
+          });
+        }
       }
 
       // Sort by fantasy points
       matched.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
+      matchedKickers.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
       setMatchedStats(matched);
+      setKickerStats(matchedKickers);
       setLastFetch(new Date());
     } catch (err) {
       console.error('Error fetching live stats:', err);
@@ -163,11 +212,21 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
     try {
       let syncCount = 0;
 
+      // Sync player stats
       for (const matched of matchedStats) {
         // Only sync if we have a matched player
         if (matched.matchedPlayer) {
           const { playerId, week, ...statsWithoutMeta } = matched.stats;
           await savePlayerStats(weekName, matched.matchedPlayer.id, statsWithoutMeta);
+          syncCount++;
+        }
+      }
+
+      // Sync kicker stats
+      for (const kicker of kickerStats) {
+        if (kicker.matchedPlayer) {
+          const { playerId, week, ...statsWithoutMeta } = kicker.stats;
+          await savePlayerStats(weekName, kicker.matchedPlayer.id, statsWithoutMeta);
           syncCount++;
         }
       }
@@ -415,8 +474,83 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
         </div>
       )}
 
+      {/* Kicker Stats Table */}
+      {kickerStats.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="font-medium text-gray-800">
+              Kicker Stats ({kickerStats.length} kickers)
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="py-2 px-3 text-left font-medium text-gray-600">ESPN Player</th>
+                  <th className="py-2 px-3 text-left font-medium text-gray-600">Team</th>
+                  <th className="py-2 px-3 text-left font-medium text-gray-600">Matched To</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">Fantasy Pts</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 0-39</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 40-49</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG 50+</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">FG Miss</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">XP</th>
+                  <th className="py-2 px-3 text-right font-medium text-gray-600">Long</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {kickerStats.map((kicker, idx) => (
+                  <tr
+                    key={`${kicker.espnName}-${kicker.espnTeam}-${idx}`}
+                    className={`${
+                      kicker.matchedPlayer
+                        ? 'bg-green-50'
+                        : 'bg-yellow-50'
+                    } hover:bg-gray-50`}
+                  >
+                    <td className="py-2 px-3 font-medium">{kicker.espnName}</td>
+                    <td className="py-2 px-3">{kicker.espnTeam}</td>
+                    <td className="py-2 px-3">
+                      {kicker.matchedPlayer ? (
+                        <span className="text-green-700">
+                          {kicker.matchedPlayer.name}
+                        </span>
+                      ) : (
+                        <span className="text-yellow-700">No match</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right font-bold">
+                      {kicker.fantasyPoints.toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.fg0_39 > 0 ? kicker.fg0_39 : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.fg40_49 > 0 ? kicker.fg40_49 : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-green-700 font-medium">
+                      {kicker.fg50Plus > 0 ? kicker.fg50Plus : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-red-600">
+                      {kicker.fgMissed > 0 ? kicker.fgMissed : '-'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {kicker.xpMade}/{kicker.xpMade + kicker.xpMissed}
+                    </td>
+                    <td className="py-2 px-3 text-right text-gray-500">
+                      {kicker.longFG > 0 ? `${kicker.longFG}` : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!loading && matchedStats.length === 0 && games.length === 0 && (
+      {!loading && matchedStats.length === 0 && kickerStats.length === 0 && games.length === 0 && (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">
             Click "Fetch Live Stats" to get current game data from ESPN
