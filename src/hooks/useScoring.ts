@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { User, WeeklyRoster, Player, RosterScore, PlayerScore, PlayerStats, PlayoffWeekName } from '../types';
 import { PLAYOFF_WEEK_NAMES } from '../types';
-import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek } from '../services/firebase';
+import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers } from '../services/firebase';
 import { calculatePoints } from '../services/scoring';
 
 interface UseScoringResult {
@@ -166,7 +166,7 @@ export interface MultiWeekStanding {
 
 // Get standings across all weeks with per-week breakdown
 export function useMultiWeekStandings(
-  getPlayerById: (id: string) => Player | undefined
+  _getPlayerById?: (id: string) => Player | undefined // Deprecated, now loads players internally
 ): {
   standings: MultiWeekStanding[];
   loading: boolean;
@@ -182,7 +182,15 @@ export function useMultiWeekStandings(
     setError(null);
 
     try {
-      const users = await getAllUsers();
+      // Load all users and ALL cached players (not filtered by week)
+      const [users, allPlayers] = await Promise.all([
+        getAllUsers(),
+        getCachedPlayers(),
+      ]);
+
+      // Create player map for lookups
+      const playerMap = new Map<string, Player>();
+      allPlayers.forEach(p => playerMap.set(p.id, p));
 
       // Initialize standings for each user
       const userStandings = new Map<string, MultiWeekStanding>();
@@ -228,7 +236,7 @@ export function useMultiWeekStandings(
             if (!playerId) continue;
             const stats = statsMap.get(playerId);
             if (stats) {
-              const player = getPlayerById(playerId);
+              const player = playerMap.get(playerId);
               weekPoints += calculatePoints(stats, undefined, player?.position);
             }
           }
