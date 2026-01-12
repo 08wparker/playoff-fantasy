@@ -463,25 +463,41 @@ export function matchPlayer(
   espnPlayer: ESPNPlayerStats,
   ourPlayers: { id: string; name: string; team: string }[]
 ): string | null {
-  // Normalize names for comparison
+  // Normalize names for comparison (removes suffixes like Jr., Sr., III, II)
   const normalize = (name: string) =>
     name.toLowerCase()
       .replace(/[^a-z\s]/g, '')
+      .replace(/\s+(jr|sr|iii|ii|iv|v)(\s|$)/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
   const espnName = normalize(espnPlayer.name);
   const espnTeam = espnPlayer.team;
 
-  // Try exact match first
+  // Try exact match first (after normalization removes suffixes)
   for (const player of ourPlayers) {
     if (normalize(player.name) === espnName && player.team === espnTeam) {
       return player.id;
     }
   }
 
-  // Try partial match (last name + team)
-  const espnLastName = espnName.split(' ').pop() || '';
+  // Try first name + last name match (handles suffix differences like Jr./Sr.)
+  const espnParts = espnName.split(' ');
+  const espnFirstName = espnParts[0] || '';
+  const espnLastName = espnParts[espnParts.length - 1] || '';
+
+  for (const player of ourPlayers) {
+    const ourParts = normalize(player.name).split(' ');
+    const ourFirstName = ourParts[0] || '';
+    const ourLastName = ourParts[ourParts.length - 1] || '';
+
+    // Match if first name AND last name match AND same team
+    if (ourFirstName === espnFirstName && ourLastName === espnLastName && player.team === espnTeam) {
+      return player.id;
+    }
+  }
+
+  // Try last name + team match as fallback
   for (const player of ourPlayers) {
     const ourLastName = normalize(player.name).split(' ').pop() || '';
     if (ourLastName === espnLastName && player.team === espnTeam) {
