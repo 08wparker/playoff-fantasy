@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { PlayoffWeekName, Player, PlayerStats, User, WeeklyRoster } from '../../types';
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 import { formatPoints, calculatePoints } from '../../services/scoring';
-import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers, getDefaultScoreboardTab } from '../../services/firebase';
+import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers, getDefaultScoreboardTab, getWeeklySummary } from '../../services/firebase';
 import type { MultiWeekStanding } from '../../hooks/useScoring';
 
 const WEEKS: PlayoffWeekName[] = ['wildcard', 'divisional', 'championship', 'superbowl'];
@@ -39,11 +39,23 @@ export function Scoreboard({
   const [weekData, setWeekData] = useState<WeekRosterScore[]>([]);
   const [weekLoading, setWeekLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
   // Load default tab on mount
   useEffect(() => {
     getDefaultScoreboardTab().then(tab => setActiveTab(tab));
   }, []);
+
+  // Load summary when tab changes to a week
+  useEffect(() => {
+    if (activeTab && activeTab !== 'overall') {
+      getWeeklySummary(activeTab).then(result => {
+        setSummary(result?.summary || null);
+      });
+    } else {
+      setSummary(null);
+    }
+  }, [activeTab]);
 
   // Load week-specific data when a week tab is selected
   const loadWeekData = useCallback(async (weekName: PlayoffWeekName) => {
@@ -172,6 +184,18 @@ export function Scoreboard({
           </button>
         ))}
       </div>
+
+      {/* Weekly Summary */}
+      {summary && (
+        <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-lg border border-primary-200 p-4">
+          <h3 className="font-semibold text-primary-800 mb-2 flex items-center gap-2">
+            <span>📊</span> {PLAYOFF_WEEK_DISPLAY_NAMES[activeTab as PlayoffWeekName]} Recap
+          </h3>
+          <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+            {summary}
+          </div>
+        </div>
+      )}
 
       {/* Loading */}
       {isLoading && (
