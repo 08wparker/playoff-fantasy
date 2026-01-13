@@ -903,3 +903,41 @@ export function subscribeToLiveStatsConfig(
     }
   });
 }
+
+// ============================================
+// Scoreboard Default Tab functions
+// ============================================
+
+export type ScoreboardTab = 'overall' | 'wildcard' | 'divisional' | 'championship' | 'superbowl';
+
+// Save default scoreboard tab
+export async function setDefaultScoreboardTab(tab: ScoreboardTab): Promise<boolean> {
+  try {
+    const configRef = doc(db, 'config', 'scoreboardTab');
+    await setDoc(configRef, {
+      tab,
+      updatedAt: new Date(),
+    });
+    console.log(`Set default scoreboard tab to: ${tab}`);
+    return true;
+  } catch (error) {
+    console.error('Error setting default scoreboard tab:', error);
+    return false;
+  }
+}
+
+// Get default scoreboard tab
+export async function getDefaultScoreboardTab(): Promise<ScoreboardTab> {
+  try {
+    const configRef = doc(db, 'config', 'scoreboardTab');
+    const configSnap = await getDoc(configRef);
+
+    if (configSnap.exists()) {
+      return configSnap.data().tab as ScoreboardTab;
+    }
+    return 'overall';
+  } catch (error) {
+    console.error('Error getting default scoreboard tab:', error);
+    return 'overall';
+  }
+}

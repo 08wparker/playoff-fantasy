@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { PlayoffWeekName, Player, PlayerStats, User, WeeklyRoster } from '../../types';
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 import { formatPoints, calculatePoints } from '../../services/scoring';
-import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers } from '../../services/firebase';
+import { getAllUsers, getAllRostersForWeek, getAllPlayerStatsForWeek, getCachedPlayers, getDefaultScoreboardTab } from '../../services/firebase';
 import type { MultiWeekStanding } from '../../hooks/useScoring';
 
 const WEEKS: PlayoffWeekName[] = ['wildcard', 'divisional', 'championship', 'superbowl'];
@@ -35,10 +35,15 @@ export function Scoreboard({
   onRefresh,
   currentUserId,
 }: ScoreboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('wildcard');
+  const [activeTab, setActiveTab] = useState<TabType | null>(null);
   const [weekData, setWeekData] = useState<WeekRosterScore[]>([]);
   const [weekLoading, setWeekLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+
+  // Load default tab on mount
+  useEffect(() => {
+    getDefaultScoreboardTab().then(tab => setActiveTab(tab));
+  }, []);
 
   // Load week-specific data when a week tab is selected
   const loadWeekData = useCallback(async (weekName: PlayoffWeekName) => {
@@ -108,10 +113,14 @@ export function Scoreboard({
     }
   }, []);
 
-  // Load wildcard data when component mounts
+  // Load data when default tab is set
   useEffect(() => {
-    loadWeekData('wildcard');
-  }, [loadWeekData]);
+    if (activeTab && activeTab !== 'overall') {
+      loadWeekData(activeTab);
+    } else if (activeTab === 'overall') {
+      onRefresh();
+    }
+  }, [activeTab, loadWeekData, onRefresh]);
 
   // Handle tab change
   const handleTabChange = (tab: TabType) => {
@@ -125,6 +134,15 @@ export function Scoreboard({
   };
 
   const isLoading = activeTab === 'overall' ? loading : weekLoading;
+
+  // Show loading while fetching default tab
+  if (activeTab === null) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
