@@ -104,9 +104,10 @@ export function AdminWeeklySummary() {
         });
       }
 
-      // Sort by week points
-      weekStandings.sort((a, b) => b.weekPoints - a.weekPoints);
-      setStandings(weekStandings);
+      // Filter out users who didn't set a roster, then sort by week points
+      const activeStandings = weekStandings.filter(s => s.roster && s.playerBreakdown.length > 0);
+      activeStandings.sort((a, b) => b.weekPoints - a.weekPoints);
+      setStandings(activeStandings);
       setDataLoaded(true);
     } catch (err) {
       console.error('Error loading week data:', err);
