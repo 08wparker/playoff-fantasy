@@ -9,6 +9,7 @@ import { Layout } from './components/layout/Layout';
 import { RosterBuilder } from './components/roster/RosterBuilder';
 import { Scoreboard } from './components/scoring/Scoreboard';
 import { LiveStats } from './components/scoring/LiveStats';
+import { WeeklyPlayerStats } from './components/scoring/WeeklyPlayerStats';
 import { AdminSync } from './components/admin/AdminSync';
 import { AdminStats } from './components/admin/AdminStats';
 import { AdminScoringRules } from './components/admin/AdminScoringRules';
@@ -16,6 +17,7 @@ import { AdminWeek } from './components/admin/AdminWeek';
 import { AdminRosterLock } from './components/admin/AdminRosterLock';
 import { AdminUsers } from './components/admin/AdminUsers';
 import { AdminLiveStats } from './components/admin/AdminLiveStats';
+import type { TabType } from './components/layout/TabNav';
 
 // Admin email addresses
 const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
@@ -29,7 +31,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
 // Main app content (when authenticated)
 function AppContent() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'scores' | 'admin'>('roster');
+  const [activeTab, setActiveTab] = useState<TabType>('roster');
   const { week: currentWeek, weekName, loading: weekLoading } = useCurrentWeek();
 
   const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
@@ -79,6 +81,8 @@ function AppContent() {
           onSetPlayer={setPlayerForSlot}
           onSave={saveCurrentRoster}
         />
+      ) : activeTab === 'wildcard-stats' ? (
+        <WeeklyPlayerStats weekName="wildcard" />
       ) : activeTab === 'live' ? (
         <LiveStats currentWeek={currentWeek} />
       ) : activeTab === 'scores' ? (
