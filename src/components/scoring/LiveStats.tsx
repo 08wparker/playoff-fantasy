@@ -301,8 +301,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               pointsAllowed: stat.pointsAllowed,
               sacks: stat.sacks,
               defensiveInterceptions: stat.interceptions,
-              fumbleRecoveries: 0,
-              defensiveTDs: 0,
+              fumbleRecoveries: stat.fumbleRecoveries,
+              defensiveTDs: stat.defensiveTDs,
             });
             synced++;
           } catch (err) {
