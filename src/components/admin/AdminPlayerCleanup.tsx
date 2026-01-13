@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import { checkPlayerUsage, updatePlayer, deletePlayersByIds, getCachedPlayers } from '../../services/firebase';
+import { checkPlayerUsage, updatePlayer, deletePlayersByIds, getCachedPlayers, getPlayerStats } from '../../services/firebase';
+
+interface UsageDetail {
+  usedBy: string[];
+  inRosters: { odId: string; week: number }[];
+  hasWildcardStats: boolean;
+}
 
 export function AdminPlayerCleanup() {
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [usageInfo, setUsageInfo] = useState<{
-    buffaloKicker: { usedBy: number; inRosters: number } | null;
-    mattPrater: { usedBy: number; inRosters: number; id: string } | null;
+    buffaloKicker: UsageDetail | null;
+    mattPrater: { detail: UsageDetail; id: string } | null;
   }>({ buffaloKicker: null, mattPrater: null });
 
   // Check current state
@@ -27,38 +33,54 @@ export function AdminPlayerCleanup() {
 
       // Check usage for Buffalo Kicker
       const buffaloUsage = await checkPlayerUsage('k-buffalo-kicker');
+      const buffaloStats = await getPlayerStats('wildcard', 'k-buffalo-kicker');
 
       // Check usage for duplicate Matt Prater
       let praterUsage = null;
       let praterId = '';
+      let praterStats = null;
       if (mattPrater) {
         praterId = mattPrater.id;
         praterUsage = await checkPlayerUsage(mattPrater.id);
+        praterStats = await getPlayerStats('wildcard', mattPrater.id);
       }
 
       setUsageInfo({
         buffaloKicker: buffaloKicker ? {
-          usedBy: buffaloUsage.usedByUsers.length,
-          inRosters: buffaloUsage.inRosters.length,
+          usedBy: buffaloUsage.usedByUsers,
+          inRosters: buffaloUsage.inRosters,
+          hasWildcardStats: !!buffaloStats,
         } : null,
         mattPrater: mattPrater ? {
-          usedBy: praterUsage?.usedByUsers.length || 0,
-          inRosters: praterUsage?.inRosters.length || 0,
+          detail: {
+            usedBy: praterUsage?.usedByUsers || [],
+            inRosters: praterUsage?.inRosters || [],
+            hasWildcardStats: !!praterStats,
+          },
           id: praterId,
         } : null,
       });
 
+      // Build detailed result message
       let msg = '';
       if (buffaloKicker) {
-        msg += `"Buffalo Kicker" (k-buffalo-kicker): Used by ${buffaloUsage.usedByUsers.length} users, in ${buffaloUsage.inRosters.length} rosters\n`;
+        msg += `"Buffalo Kicker" (k-buffalo-kicker):\n`;
+        msg += `  - In usedPlayers: ${buffaloUsage.usedByUsers.length} users (${buffaloUsage.usedByUsers.join(', ') || 'none'})\n`;
+        msg += `  - In rosters: ${buffaloUsage.inRosters.length} (${buffaloUsage.inRosters.map(r => `${r.odId} week ${r.week}`).join(', ') || 'none'})\n`;
+        msg += `  - Has wildcard stats: ${buffaloStats ? 'YES' : 'NO'}\n`;
       } else {
         msg += `"Buffalo Kicker" not found in players collection\n`;
       }
 
+      msg += '\n';
+
       if (mattPrater) {
-        msg += `"Matt Prater" (${praterId}): Used by ${praterUsage?.usedByUsers.length || 0} users, in ${praterUsage?.inRosters.length || 0} rosters`;
+        msg += `"Matt Prater" (${praterId}):\n`;
+        msg += `  - In usedPlayers: ${praterUsage?.usedByUsers.length || 0} users\n`;
+        msg += `  - In rosters: ${praterUsage?.inRosters.length || 0}\n`;
+        msg += `  - Has wildcard stats: ${praterStats ? 'YES' : 'NO'}`;
       } else {
-        msg += `Duplicate "Matt Prater" not found`;
+        msg += `Duplicate "Matt Prater" not found in players collection`;
       }
 
       setResult(msg);
@@ -76,7 +98,8 @@ export function AdminPlayerCleanup() {
       return;
     }
 
-    if (usageInfo.mattPrater.usedBy > 0 || usageInfo.mattPrater.inRosters > 0) {
+    const { detail, id: praterId } = usageInfo.mattPrater;
+    if (detail.usedBy.length > 0 || detail.inRosters.length > 0) {
       setResult('ERROR: Cannot delete duplicate Matt Prater - it is being used by users! Manual migration required.');
       return;
     }
@@ -90,14 +113,20 @@ export function AdminPlayerCleanup() {
       });
 
       if (!success) {
-        setResult('Error updating Buffalo Kicker');
+        setResult('Error updating Buffalo Kicker player record');
         return;
       }
 
       // Step 2: Delete duplicate Matt Prater
-      const deleted = await deletePlayersByIds([usageInfo.mattPrater.id]);
+      const deleted = await deletePlayersByIds([praterId]);
 
-      setResult(`Success! Updated "Buffalo Kicker" to "Matt Prater" and deleted duplicate (${deleted} player removed)`);
+      let msg = `Success!\n`;
+      msg += `- Updated "Buffalo Kicker" to "Matt Prater" with headshot\n`;
+      msg += `- Deleted duplicate player (${deleted} removed)\n\n`;
+      msg += `Note: playerStats/wildcard/players/k-buffalo-kicker remains unchanged.\n`;
+      msg += `The stats will still be correctly associated via the player ID.`;
+
+      setResult(msg);
 
       // Reset usage info
       setUsageInfo({ buffaloKicker: null, mattPrater: null });
@@ -108,13 +137,17 @@ export function AdminPlayerCleanup() {
     }
   }
 
+  const canCleanup = usageInfo.mattPrater &&
+    usageInfo.mattPrater.detail.usedBy.length === 0 &&
+    usageInfo.mattPrater.detail.inRosters.length === 0;
+
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-xl font-bold mb-4">Player Cleanup: Buffalo Kicker → Matt Prater</h2>
 
       <p className="text-gray-600 mb-4 text-sm">
         This will rename "Buffalo Kicker" (k-buffalo-kicker) to "Matt Prater" and delete the duplicate Matt Prater entry.
-        All users who used "Buffalo Kicker" will now see "Matt Prater" in their roster history.
+        The playerStats document ID stays the same, so wildcard stats will still be correctly associated.
       </p>
 
       <div className="flex gap-3 mb-4">
@@ -128,7 +161,7 @@ export function AdminPlayerCleanup() {
 
         <button
           onClick={handleCleanup}
-          disabled={updating || !usageInfo.mattPrater || usageInfo.mattPrater.usedBy > 0}
+          disabled={updating || !canCleanup}
           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300"
         >
           {updating ? 'Updating...' : '2. Perform Cleanup'}
@@ -136,27 +169,33 @@ export function AdminPlayerCleanup() {
       </div>
 
       {usageInfo.buffaloKicker !== null && (
-        <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
-          <p><strong>Buffalo Kicker (k-buffalo-kicker):</strong></p>
-          <p>Used by {usageInfo.buffaloKicker.usedBy} users, in {usageInfo.buffaloKicker.inRosters} rosters</p>
+        <div className="mb-4 p-3 bg-gray-100 rounded text-sm space-y-2">
+          <div>
+            <p><strong>Buffalo Kicker (k-buffalo-kicker):</strong></p>
+            <p>In usedPlayers: {usageInfo.buffaloKicker.usedBy.length} users</p>
+            <p>In rosters: {usageInfo.buffaloKicker.inRosters.length}</p>
+            <p>Has wildcard stats: {usageInfo.buffaloKicker.hasWildcardStats ? 'Yes' : 'No'}</p>
+          </div>
 
           {usageInfo.mattPrater && (
-            <>
-              <p className="mt-2"><strong>Duplicate Matt Prater ({usageInfo.mattPrater.id}):</strong></p>
-              <p>Used by {usageInfo.mattPrater.usedBy} users, in {usageInfo.mattPrater.inRosters} rosters</p>
+            <div className="pt-2 border-t border-gray-300">
+              <p><strong>Duplicate Matt Prater ({usageInfo.mattPrater.id}):</strong></p>
+              <p>In usedPlayers: {usageInfo.mattPrater.detail.usedBy.length} users</p>
+              <p>In rosters: {usageInfo.mattPrater.detail.inRosters.length}</p>
+              <p>Has wildcard stats: {usageInfo.mattPrater.detail.hasWildcardStats ? 'Yes' : 'No'}</p>
 
-              {usageInfo.mattPrater.usedBy === 0 && usageInfo.mattPrater.inRosters === 0 ? (
+              {canCleanup ? (
                 <p className="mt-2 text-green-700 font-medium">Safe to delete duplicate!</p>
               ) : (
                 <p className="mt-2 text-red-700 font-medium">WARNING: Duplicate is in use - cannot auto-delete!</p>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
 
       {result && (
-        <div className={`p-4 rounded-lg whitespace-pre-wrap text-sm ${
+        <div className={`p-4 rounded-lg whitespace-pre-wrap text-sm font-mono ${
           result.includes('Error') || result.includes('ERROR')
             ? 'bg-red-100 text-red-700'
             : result.includes('Success')
