@@ -11,7 +11,7 @@ import {
   type ESPNGame,
   type ESPNBoxScore,
 } from '../../services/espn';
-import { getCachedPlayers, savePlayerStats, cachePlayer } from '../../services/firebase';
+import { getCachedPlayers, savePlayerStats, cachePlayer, setLiveStatsEnabled, subscribeToLiveStatsConfig, type LiveStatsConfig } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
 
 interface AdminLiveStatsProps {
@@ -53,8 +53,23 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [liveStatsConfig, setLiveStatsConfig] = useState<LiveStatsConfig>({ enabled: false });
+  const [togglingLiveStats, setTogglingLiveStats] = useState(false);
 
   const weekName = PLAYOFF_WEEK_NAMES[currentWeek] as PlayoffWeekName;
+
+  // Subscribe to live stats config
+  useEffect(() => {
+    const unsubscribe = subscribeToLiveStatsConfig(setLiveStatsConfig);
+    return () => unsubscribe();
+  }, []);
+
+  // Toggle live stats enabled
+  const handleToggleLiveStats = async () => {
+    setTogglingLiveStats(true);
+    await setLiveStatsEnabled(!liveStatsConfig.enabled);
+    setTogglingLiveStats(false);
+  };
 
   // Load our players from Firebase
   useEffect(() => {
@@ -317,10 +332,35 @@ export function AdminLiveStats({ currentWeek }: AdminLiveStatsProps) {
 
   return (
     <div className="space-y-6">
+      {/* Live Stats Public Toggle */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-gray-900">Public Live Stats Tab</h3>
+            <p className="text-sm text-gray-500">
+              {liveStatsConfig.enabled
+                ? 'Users can see live stats on the Live Stats tab'
+                : 'Live Stats tab is hidden from users (shows previous week scores)'}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleLiveStats}
+            disabled={togglingLiveStats}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              liveStatsConfig.enabled
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+            } disabled:opacity-50`}
+          >
+            {togglingLiveStats ? 'Updating...' : liveStatsConfig.enabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Live Stats (ESPN)</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Live Stats (ESPN) - Admin View</h2>
           <p className="text-sm text-gray-500">
             Fetch real-time player stats from ESPN for {PLAYOFF_WEEK_DISPLAY_NAMES[weekName]}
           </p>

@@ -10,7 +10,7 @@ import {
   type ESPNGame,
   type ESPNBoxScore,
 } from '../../services/espn';
-import { getCachedPlayers, savePlayerStats } from '../../services/firebase';
+import { getCachedPlayers, savePlayerStats, subscribeToLiveStatsConfig, type LiveStatsConfig } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
 
 interface LiveStatsProps {
@@ -64,8 +64,15 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncCount, setSyncCount] = useState(0);
+  const [liveStatsConfig, setLiveStatsConfig] = useState<LiveStatsConfig>({ enabled: false });
 
   const weekName = PLAYOFF_WEEK_NAMES[currentWeek] as PlayoffWeekName;
+
+  // Subscribe to live stats config
+  useEffect(() => {
+    const unsubscribe = subscribeToLiveStatsConfig(setLiveStatsConfig);
+    return () => unsubscribe();
+  }, []);
 
   // Load our players from Firebase on mount
   useEffect(() => {
@@ -347,9 +354,9 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
     }
   }, [currentWeek, players, findPlayerPosition, findPlayer, weekName]);
 
-  // Fetch stats when players are loaded and auto-refresh every 60 seconds
+  // Fetch stats when players are loaded, live stats enabled, and auto-refresh every 60 seconds
   useEffect(() => {
-    if (players.length === 0) return;
+    if (players.length === 0 || !liveStatsConfig.enabled) return;
 
     fetchLiveStats();
 
@@ -358,7 +365,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [fetchLiveStats, players.length]);
+  }, [fetchLiveStats, players.length, liveStatsConfig.enabled]);
 
   // Split stats by category
   const offensiveStats = playerStats.filter(p => ['QB', 'RB', 'WR', 'TE'].includes(p.position));
@@ -379,10 +386,30 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
     }
   };
 
-  if (loading) {
+  if (loading && liveStatsConfig.enabled) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show placeholder when live stats are disabled
+  if (!liveStatsConfig.enabled) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="text-4xl mb-4">🏈</div>
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">
+            Live Stats Coming Soon
+          </h3>
+          <p className="text-gray-500">
+            Live stats will be available when {PLAYOFF_WEEK_DISPLAY_NAMES[weekName]} games begin.
+          </p>
+          <p className="text-sm text-gray-400 mt-2">
+            Check back during game time for real-time player stats!
+          </p>
+        </div>
       </div>
     );
   }

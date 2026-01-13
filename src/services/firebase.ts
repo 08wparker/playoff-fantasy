@@ -20,6 +20,7 @@ import {
   getDocs,
   arrayUnion,
   onSnapshot,
+  deleteDoc,
 } from 'firebase/firestore';
 import type { User, WeeklyRoster, UsedPlayers, Player, PlayerStats, PlayoffWeekName, NFLTeam } from '../types';
 
@@ -409,6 +410,21 @@ export async function clearAllPlayers(): Promise<void> {
   }
 }
 
+// Delete specific players by ID
+export async function deletePlayersByIds(playerIds: string[]): Promise<number> {
+  let deleted = 0;
+  for (const playerId of playerIds) {
+    try {
+      await deleteDoc(doc(db, 'players', playerId));
+      deleted++;
+      console.log(`Deleted player: ${playerId}`);
+    } catch (error) {
+      console.error(`Error deleting player ${playerId}:`, error);
+    }
+  }
+  return deleted;
+}
+
 // NFL team logo URLs (using ESPN CDN)
 const NFL_TEAM_LOGOS: Record<string, string> = {
   ARI: 'https://a.espncdn.com/i/teamlogos/nfl/500/ari.png',
@@ -456,9 +472,9 @@ export async function syncPlayersToFirestore(
   const byPosition: Record<string, number> = {};
   const playerIdMap = new Map<string, string>(); // Maps CSV player name -> Firebase doc ID
 
-  // First clear existing players
-  await clearAllPlayers();
-  console.log(`Syncing ${players.length} players from CSV...`);
+  // NOTE: We do NOT clear existing players - we need to keep players from previous weeks
+  // for historical scoring. Players are filtered by week's playoffConfig teams in usePlayers hook.
+  console.log(`Syncing ${players.length} players from CSV (adding/updating, not clearing)...`);
 
   // Then add new players
   for (const player of players) {
@@ -759,6 +775,62 @@ export function subscribeToCurrentWeek(
       callback(doc.data().week as number | null);
     } else {
       callback(null);
+    }
+  });
+}
+
+// ============================================
+// Live Stats Config functions
+// ============================================
+
+export interface LiveStatsConfig {
+  enabled: boolean;
+  updatedAt?: Date;
+}
+
+// Save live stats enabled/disabled state
+export async function setLiveStatsEnabled(enabled: boolean): Promise<boolean> {
+  try {
+    const configRef = doc(db, 'config', 'liveStats');
+    await setDoc(configRef, {
+      enabled,
+      updatedAt: new Date(),
+    });
+    console.log(`Live stats ${enabled ? 'enabled' : 'disabled'}`);
+    return true;
+  } catch (error) {
+    console.error('Error setting live stats config:', error);
+    return false;
+  }
+}
+
+// Get live stats config
+export async function getLiveStatsConfig(): Promise<LiveStatsConfig> {
+  try {
+    const configRef = doc(db, 'config', 'liveStats');
+    const configSnap = await getDoc(configRef);
+
+    if (configSnap.exists()) {
+      return configSnap.data() as LiveStatsConfig;
+    }
+    // Default to disabled
+    return { enabled: false };
+  } catch (error) {
+    console.error('Error getting live stats config:', error);
+    return { enabled: false };
+  }
+}
+
+// Subscribe to live stats config changes (real-time)
+export function subscribeToLiveStatsConfig(
+  callback: (config: LiveStatsConfig) => void
+): () => void {
+  const configRef = doc(db, 'config', 'liveStats');
+  return onSnapshot(configRef, (doc) => {
+    if (doc.exists()) {
+      callback(doc.data() as LiveStatsConfig);
+    } else {
+      callback({ enabled: false });
     }
   });
 }
