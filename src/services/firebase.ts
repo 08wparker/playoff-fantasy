@@ -382,6 +382,75 @@ export async function cachePlayer(player: Player): Promise<void> {
   }
 }
 
+// Update specific fields on a player
+export async function updatePlayer(
+  playerId: string,
+  updates: Partial<Player>
+): Promise<boolean> {
+  try {
+    const playerRef = doc(db, 'players', playerId);
+    await updateDoc(playerRef, updates);
+    console.log(`Updated player ${playerId}:`, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating player:', error);
+    return false;
+  }
+}
+
+// Check if a player ID is used by any user
+export async function checkPlayerUsage(playerId: string): Promise<{
+  usedByUsers: string[];
+  inRosters: { odId: string; week: number }[];
+}> {
+  const result = {
+    usedByUsers: [] as string[],
+    inRosters: [] as { odId: string; week: number }[],
+  };
+
+  try {
+    // Check usedPlayers collection
+    const usedPlayersRef = collection(db, 'usedPlayers');
+    const usedSnapshot = await getDocs(usedPlayersRef);
+
+    for (const docSnap of usedSnapshot.docs) {
+      const data = docSnap.data() as UsedPlayers;
+      if (data.players?.includes(playerId)) {
+        result.usedByUsers.push(docSnap.id);
+      }
+    }
+
+    // Check all rosters
+    const rostersRef = collection(db, 'rosters');
+    const rostersSnapshot = await getDocs(rostersRef);
+
+    for (const rosterDoc of rostersSnapshot.docs) {
+      const weeksRef = collection(db, 'rosters', rosterDoc.id, 'weeks');
+      const weeksSnapshot = await getDocs(weeksRef);
+
+      for (const weekDoc of weeksSnapshot.docs) {
+        const roster = weekDoc.data() as WeeklyRoster;
+        // Check each slot in the roster
+        const rosterPlayerIds = [
+          roster.qb, roster.rb1, roster.rb2,
+          roster.wr1, roster.wr2, roster.wr3,
+          roster.te, roster.dst, roster.k
+        ].filter(Boolean);
+        if (rosterPlayerIds.includes(playerId)) {
+          result.inRosters.push({
+            odId: rosterDoc.id,
+            week: roster.week,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking player usage:', error);
+  }
+
+  return result;
+}
+
 export async function cachePlayers(players: Player[]): Promise<void> {
   try {
     for (const player of players) {

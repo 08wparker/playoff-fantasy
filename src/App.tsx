@@ -17,6 +17,7 @@ import { AdminWeek } from './components/admin/AdminWeek';
 import { AdminRosterLock } from './components/admin/AdminRosterLock';
 import { AdminUsers } from './components/admin/AdminUsers';
 import { AdminLiveStats } from './components/admin/AdminLiveStats';
+import { AdminPlayerCleanup } from './components/admin/AdminPlayerCleanup';
 import type { TabType } from './components/layout/TabNav';
 
 // Admin email addresses
@@ -99,6 +100,7 @@ function AppContent() {
           <AdminRosterLock />
           <AdminLiveStats currentWeek={currentWeek} />
           <AdminUsers />
+          <AdminPlayerCleanup />
           <AdminScoringRules />
           <AdminStats />
           <AdminSync />
