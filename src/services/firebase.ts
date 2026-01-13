@@ -941,3 +941,46 @@ export async function getDefaultScoreboardTab(): Promise<ScoreboardTab> {
     return 'overall';
   }
 }
+
+// ============================================
+// Weekly Summary functions
+// ============================================
+
+export interface WeeklySummary {
+  weekName: PlayoffWeekName;
+  summary: string;
+  generatedAt: Date;
+}
+
+// Save weekly summary
+export async function saveWeeklySummary(weekName: PlayoffWeekName, summary: string): Promise<boolean> {
+  try {
+    const summaryRef = doc(db, 'weeklySummaries', weekName);
+    await setDoc(summaryRef, {
+      weekName,
+      summary,
+      generatedAt: new Date(),
+    });
+    console.log(`Saved summary for ${weekName}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving weekly summary:', error);
+    return false;
+  }
+}
+
+// Get weekly summary
+export async function getWeeklySummary(weekName: PlayoffWeekName): Promise<WeeklySummary | null> {
+  try {
+    const summaryRef = doc(db, 'weeklySummaries', weekName);
+    const summarySnap = await getDoc(summaryRef);
+
+    if (summarySnap.exists()) {
+      return summarySnap.data() as WeeklySummary;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting weekly summary:', error);
+    return null;
+  }
+}
