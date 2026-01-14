@@ -294,6 +294,59 @@ export async function addUsedPlayers(userId: string, playerIds: string[]): Promi
   }
 }
 
+// Reset a user's usedPlayers list to empty
+export async function resetUsedPlayers(userId: string): Promise<boolean> {
+  try {
+    const usedRef = doc(db, 'usedPlayers', userId);
+    await setDoc(usedRef, { players: [] });
+    console.log(`Reset usedPlayers for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error resetting used players:', error);
+    return false;
+  }
+}
+
+// Sync a user's roster for a specific week to their usedPlayers list
+export async function syncRosterToUsedPlayers(userId: string, week: number): Promise<{ success: boolean; playerIds: string[] }> {
+  try {
+    const roster = await getRoster(userId, week);
+    if (!roster) {
+      console.log(`No roster found for user ${userId} week ${week}`);
+      return { success: false, playerIds: [] };
+    }
+
+    const playerIds = [
+      roster.qb, roster.rb1, roster.rb2,
+      roster.wr1, roster.wr2, roster.wr3,
+      roster.te, roster.dst, roster.k,
+    ].filter((id): id is string => id !== null);
+
+    if (playerIds.length === 0) {
+      console.log(`No players in roster for user ${userId} week ${week}`);
+      return { success: false, playerIds: [] };
+    }
+
+    // Ensure usedPlayers doc exists
+    const usedRef = doc(db, 'usedPlayers', userId);
+    const usedSnap = await getDoc(usedRef);
+    if (!usedSnap.exists()) {
+      await setDoc(usedRef, { players: [] });
+    }
+
+    // Add players to used list
+    await updateDoc(usedRef, {
+      players: arrayUnion(...playerIds),
+    });
+
+    console.log(`Synced ${playerIds.length} players to usedPlayers for user ${userId} week ${week}`);
+    return { success: true, playerIds };
+  } catch (error) {
+    console.error('Error syncing roster to used players:', error);
+    return { success: false, playerIds: [] };
+  }
+}
+
 // Get all users for scoreboard
 export async function getAllUsers(): Promise<User[]> {
   try {
@@ -641,6 +694,28 @@ export async function getAllPlayerStatsForWeek(
   } catch (error) {
     console.error('Error getting all player stats for week:', error);
     return [];
+  }
+}
+
+// Clear all player stats for a specific week
+export async function clearAllPlayerStatsForWeek(
+  weekName: PlayoffWeekName
+): Promise<number> {
+  try {
+    const statsRef = collection(db, 'playerStats', weekName, 'players');
+    const statsSnap = await getDocs(statsRef);
+
+    let deleted = 0;
+    for (const docSnap of statsSnap.docs) {
+      await deleteDoc(docSnap.ref);
+      deleted++;
+    }
+
+    console.log(`Cleared ${deleted} player stats for ${weekName}`);
+    return deleted;
+  } catch (error) {
+    console.error('Error clearing player stats for week:', error);
+    return 0;
   }
 }
 

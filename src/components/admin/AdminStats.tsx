@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { savePlayerStats, getAllPlayerStatsForWeek, getCachedPlayers } from '../../services/firebase';
+import { savePlayerStats, getAllPlayerStatsForWeek, getCachedPlayers, clearAllPlayerStatsForWeek } from '../../services/firebase';
 import type { Player, PlayerStats, PlayoffWeekName, Position } from '../../types';
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 
@@ -166,6 +166,7 @@ export function AdminStats() {
   const [playerStats, setPlayerStats] = useState<Map<string, Omit<PlayerStats, 'playerId' | 'week'>>>(new Map());
   const [savingPlayers, setSavingPlayers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load players and existing stats
@@ -250,6 +251,27 @@ export function AdminStats() {
     setTimeout(() => setMessage(null), 2000);
   }, [playerStats, selectedWeek, players]);
 
+  // Clear all stats for the week
+  const handleClearStats = useCallback(async () => {
+    if (!confirm(`Are you sure you want to clear ALL stats for ${PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]}? This cannot be undone.`)) {
+      return;
+    }
+
+    setClearing(true);
+    const deleted = await clearAllPlayerStatsForWeek(selectedWeek);
+
+    if (deleted > 0) {
+      setOriginalStats(new Map());
+      setPlayerStats(new Map());
+      setMessage({ type: 'success', text: `Cleared ${deleted} player stats` });
+    } else {
+      setMessage({ type: 'error', text: 'No stats to clear or error occurred' });
+    }
+
+    setClearing(false);
+    setTimeout(() => setMessage(null), 3000);
+  }, [selectedWeek]);
+
   // Filter and group players
   const filteredPlayers = players.filter(p => p.position === selectedPosition);
   const playersByTeam = filteredPlayers.reduce((acc, player) => {
@@ -317,9 +339,18 @@ export function AdminStats() {
 
       {/* Stats summary */}
       <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
-        <span className="text-sm text-blue-700">
-          {playersWithStats} of {filteredPlayers.length} {selectedPosition}s have stats for {PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]}
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-blue-700">
+            {playersWithStats} of {filteredPlayers.length} {selectedPosition}s have stats for {PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]}
+          </span>
+          <button
+            onClick={handleClearStats}
+            disabled={clearing || playersWithStats === 0}
+            className="px-3 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {clearing ? 'Clearing...' : `Clear All ${PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]} Stats`}
+          </button>
+        </div>
         {message && (
           <span className={`text-sm font-medium ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
             {message.text}

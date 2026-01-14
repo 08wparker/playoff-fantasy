@@ -140,8 +140,8 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
     if (players.length === 0) return; // Wait for players to load
 
     try {
-      // Fetch scoreboard first
-      const scoreboardGames = await fetchNFLScoreboard();
+      // Fetch scoreboard for current playoff week
+      const scoreboardGames = await fetchNFLScoreboard(currentWeek);
       setGames(scoreboardGames);
 
       // Fetch box scores for games in progress or completed

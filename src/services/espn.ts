@@ -105,10 +105,26 @@ export interface ESPNBoxScore {
   }[];
 }
 
+// Playoff week date ranges (2025-26 season)
+// Format: YYYYMMDD-YYYYMMDD
+const PLAYOFF_WEEK_DATES: Record<number, string> = {
+  1: '20260110-20260114', // Wild Card: Jan 10-13, 2026
+  2: '20260117-20260119', // Divisional: Jan 17-18, 2026
+  3: '20260124-20260126', // Championship: Jan 25-26, 2026
+  4: '20260208-20260209', // Super Bowl: Feb 8, 2026
+};
+
 // Fetch current NFL scoreboard (all games for today/this week)
-export async function fetchNFLScoreboard(): Promise<ESPNGame[]> {
+export async function fetchNFLScoreboard(playoffWeek?: number): Promise<ESPNGame[]> {
   try {
-    const response = await fetch(`${ESPN_BASE_URL}/scoreboard`);
+    let url = `${ESPN_BASE_URL}/scoreboard`;
+
+    // If playoff week specified, add date range parameter
+    if (playoffWeek && PLAYOFF_WEEK_DATES[playoffWeek]) {
+      url += `?dates=${PLAYOFF_WEEK_DATES[playoffWeek]}`;
+    }
+
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`ESPN API error: ${response.status}`);
 
     const data = await response.json();
