@@ -20,6 +20,7 @@ import { AdminLiveStats } from './components/admin/AdminLiveStats';
 import { AdminScoreboardTab } from './components/admin/AdminScoreboardTab';
 import { AdminWeeklySummary } from './components/admin/AdminWeeklySummary';
 import { AdminInjuryReport } from './components/admin/AdminInjuryReport';
+import { AdminMissingLineups } from './components/admin/AdminMissingLineups';
 import { Analysis } from './components/analysis/Analysis';
 import type { TabType } from './components/layout/TabNav';
 
@@ -103,6 +104,7 @@ function AppContent() {
         <div className="space-y-6">
           <AdminWeek />
           <AdminRosterLock />
+          <AdminMissingLineups />
           <AdminInjuryReport />
           <AdminLiveStats currentWeek={currentWeek} />
           <AdminScoreboardTab />
