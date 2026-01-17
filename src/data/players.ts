@@ -15,10 +15,10 @@ export const WEEK_CSV_FILES: Record<number, string> = {
 };
 
 // Lock times for each playoff week (when rosters can no longer be saved)
-// Times are in CST, converted to UTC for Date objects
+// Times are in UTC
 export const WEEK_LOCK_TIMES: Record<number, Date> = {
   1: new Date('2026-01-10T21:30:00Z'), // Jan 10, 3:30 PM CST (Wild Card)
-  2: new Date('2026-01-18T21:30:00Z'), // Jan 18, 3:30 PM CST (Divisional)
+  2: new Date('2026-01-17T21:30:00Z'), // Jan 17, 2:30 PM MT (Divisional)
   3: new Date('2026-01-26T19:00:00Z'), // Jan 26, 1:00 PM CST (Conference)
   4: new Date('2026-02-09T00:30:00Z'), // Feb 8, 6:30 PM CST (Super Bowl)
 };

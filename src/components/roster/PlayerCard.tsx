@@ -68,13 +68,27 @@ export function PlayerCard({
 
       {/* Player Info */}
       <div className="flex-1 min-w-0">
-        <p
-          className={`font-medium truncate ${
-            compact ? 'text-sm' : ''
-          } ${isUsed ? 'text-gray-400' : 'text-gray-900'}`}
-        >
-          {player.name}
-        </p>
+        <div className="flex items-center gap-2">
+          <p
+            className={`font-medium truncate ${
+              compact ? 'text-sm' : ''
+            } ${isUsed ? 'text-gray-400' : 'text-gray-900'}`}
+          >
+            {player.name}
+          </p>
+          {/* Injury Status Badge */}
+          {player.injuryStatus && (
+            <span
+              className={`inline-flex px-1.5 py-0.5 text-xs font-bold rounded ${
+                player.injuryStatus === 'out'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-yellow-100 text-yellow-700'
+              }`}
+            >
+              {player.injuryStatus === 'out' ? 'OUT' : 'Q'}
+            </span>
+          )}
+        </div>
         <p className={`text-gray-500 ${compact ? 'text-xs' : 'text-sm'}`}>
           {player.team} • {player.position}
         </p>

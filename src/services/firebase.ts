@@ -22,7 +22,7 @@ import {
   onSnapshot,
   deleteDoc,
 } from 'firebase/firestore';
-import type { User, WeeklyRoster, UsedPlayers, Player, PlayerStats, PlayoffWeekName, NFLTeam } from '../types';
+import type { User, WeeklyRoster, UsedPlayers, Player, PlayerStats, PlayoffWeekName, NFLTeam, InjuryStatus } from '../types';
 
 // Firebase configuration - Replace with your own config from Firebase Console
 const firebaseConfig = {
@@ -1058,4 +1058,59 @@ export async function getWeeklySummary(weekName: PlayoffWeekName): Promise<Weekl
     console.error('Error getting weekly summary:', error);
     return null;
   }
+}
+
+// ============================================
+// Injury Report functions
+// ============================================
+
+// Update a player's injury status
+export async function setPlayerInjuryStatus(
+  playerId: string,
+  status: InjuryStatus | null
+): Promise<boolean> {
+  try {
+    const playerRef = doc(db, 'players', playerId);
+    if (status === null) {
+      // Remove injury status by setting to deleteField would require import
+      // Instead, set to undefined which Firestore will not store
+      await updateDoc(playerRef, { injuryStatus: null });
+    } else {
+      await updateDoc(playerRef, { injuryStatus: status });
+    }
+    console.log(`Set injury status for ${playerId}: ${status || 'cleared'}`);
+    return true;
+  } catch (error) {
+    console.error('Error setting player injury status:', error);
+    return false;
+  }
+}
+
+// Get all players with injury status
+export async function getInjuredPlayers(): Promise<Player[]> {
+  try {
+    const players = await getCachedPlayers();
+    return players.filter(p => p.injuryStatus);
+  } catch (error) {
+    console.error('Error getting injured players:', error);
+    return [];
+  }
+}
+
+// Clear all injury statuses
+export async function clearAllInjuryStatuses(): Promise<number> {
+  let cleared = 0;
+  try {
+    const players = await getCachedPlayers();
+    for (const player of players) {
+      if (player.injuryStatus) {
+        await setPlayerInjuryStatus(player.id, null);
+        cleared++;
+      }
+    }
+    console.log(`Cleared ${cleared} injury statuses`);
+  } catch (error) {
+    console.error('Error clearing injury statuses:', error);
+  }
+  return cleared;
 }

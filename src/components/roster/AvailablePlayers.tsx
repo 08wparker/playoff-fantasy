@@ -41,6 +41,11 @@ export function AvailablePlayers({
         const bUsed = usedSet.has(b.id);
         if (aUsed !== bUsed) return aUsed ? 1 : -1;
 
+        // Sort: healthy/questionable first, then "out" players at bottom
+        const aOut = a.injuryStatus === 'out';
+        const bOut = b.injuryStatus === 'out';
+        if (aOut !== bOut) return aOut ? 1 : -1;
+
         // For K and DST, sort alphabetically by name
         if (position === 'K' || position === 'DST') {
           return a.name.localeCompare(b.name);

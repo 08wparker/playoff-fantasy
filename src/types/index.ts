@@ -34,6 +34,9 @@ export type NFLTeam =
   | 'LAC' | 'LAR' | 'LV' | 'MIA' | 'MIN' | 'NE' | 'NO' | 'NYG'
   | 'NYJ' | 'PHI' | 'PIT' | 'SEA' | 'SF' | 'TB' | 'TEN' | 'WAS';
 
+// Injury status
+export type InjuryStatus = 'questionable' | 'out';
+
 // Player data
 export interface Player {
   id: string;
@@ -42,6 +45,7 @@ export interface Player {
   position: Position;
   imageUrl?: string;
   rank?: number;
+  injuryStatus?: InjuryStatus;
 }
 
 // Player stats for scoring
