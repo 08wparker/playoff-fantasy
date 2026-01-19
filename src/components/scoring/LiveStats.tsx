@@ -10,7 +10,7 @@ import {
   type ESPNGame,
   type ESPNBoxScore,
 } from '../../services/espn';
-import { getCachedPlayers, savePlayerStats, subscribeToLiveStatsConfig, type LiveStatsConfig } from '../../services/firebase';
+import { getCachedPlayers, batchSavePlayerStats, subscribeToLiveStatsConfig, type LiveStatsConfig } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
 
 interface LiveStatsProps {
@@ -65,20 +65,47 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncCount, setSyncCount] = useState(0);
   const [liveStatsConfig, setLiveStatsConfig] = useState<LiveStatsConfig>({ enabled: false });
+  const [error, setError] = useState<string | null>(null);
 
   const weekName = PLAYOFF_WEEK_NAMES[currentWeek] as PlayoffWeekName;
 
   // Subscribe to live stats config
   useEffect(() => {
-    const unsubscribe = subscribeToLiveStatsConfig(setLiveStatsConfig);
+    const unsubscribe = subscribeToLiveStatsConfig((config) => {
+      console.log('[LiveStats] Config updated:', config);
+      setLiveStatsConfig(config);
+    });
     return () => unsubscribe();
   }, []);
+
+  // Debug: log current state
+  useEffect(() => {
+    console.log('[LiveStats] State:', {
+      currentWeek,
+      weekName,
+      liveStatsEnabled: liveStatsConfig.enabled,
+      playersLoaded: players.length,
+      gamesFound: games.length,
+      playerStats: playerStats.length
+    });
+  }, [currentWeek, weekName, liveStatsConfig.enabled, players.length, games.length, playerStats.length]);
 
   // Load our players from Firebase on mount
   useEffect(() => {
     async function loadPlayers() {
-      const cached = await getCachedPlayers();
-      setPlayers(cached);
+      console.log('[LiveStats] Loading players from Firebase...');
+      try {
+        const cached = await getCachedPlayers();
+        console.log('[LiveStats] Loaded', cached.length, 'players');
+        setPlayers(cached);
+        if (cached.length === 0) {
+          console.warn('[LiveStats] No players loaded - setting loading to false');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[LiveStats] Error loading players:', err);
+        setLoading(false);
+      }
     }
     loadPlayers();
   }, []);
@@ -141,20 +168,32 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
 
     try {
       // Fetch scoreboard for current playoff week
+      console.log('[LiveStats] Fetching scoreboard for week', currentWeek);
       const scoreboardGames = await fetchNFLScoreboard(currentWeek);
+      console.log('[LiveStats] Found games:', scoreboardGames.map(g => `${g.shortName} (${g.status?.type?.state})`));
       setGames(scoreboardGames);
 
       // Fetch box scores for games in progress or completed
       const newBoxScores: ESPNBoxScore[] = [];
       for (const game of scoreboardGames) {
         const status = game.status?.type?.state;
+        console.log(`[LiveStats] Game ${game.shortName}: status=${status}`);
         if (status === 'in' || status === 'post') {
-          const boxScore = await fetchGameBoxScore(game.id);
-          if (boxScore) {
-            newBoxScores.push(boxScore);
+          try {
+            console.log(`[LiveStats] Fetching box score for ${game.shortName} (id: ${game.id})`);
+            const boxScore = await fetchGameBoxScore(game.id);
+            if (boxScore) {
+              console.log(`[LiveStats] Got box score: ${boxScore.players.length} players, ${boxScore.kickerStats.length} kickers`);
+              newBoxScores.push(boxScore);
+            } else {
+              console.warn(`[LiveStats] No box score returned for ${game.shortName}`);
+            }
+          } catch (err) {
+            console.error(`[LiveStats] Error fetching box score for ${game.shortName}:`, err);
           }
         }
       }
+      console.log(`[LiveStats] Total box scores: ${newBoxScores.length}`);
       setBoxScores(newBoxScores);
 
       // Build player stats list
@@ -262,12 +301,15 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
       // Sort by fantasy points
       allStats.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
       allKickerStats.sort((a, b) => b.fantasyPoints - a.fantasyPoints);
+      console.log(`[LiveStats] Built ${allStats.length} player stats, ${allKickerStats.length} kicker stats`);
       setPlayerStats(allStats);
       setKickerStats(allKickerStats);
       setLastFetch(new Date());
+      setLoading(false); // Set loading false BEFORE Firebase sync (which may fail)
 
-      // Auto-sync matched players to Firebase
-      let synced = 0;
+      // Build batch of stats to sync to Firebase
+      const statsToSync: { playerId: string; stats: Parameters<typeof batchSavePlayerStats>[1][0]['stats'] }[] = [];
+
       for (const stat of allStats) {
         // Find matching player in our collection
         let matchedPlayer: Player | null = null;
@@ -282,8 +324,9 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
         }
 
         if (matchedPlayer) {
-          try {
-            await savePlayerStats(weekName, matchedPlayer.id, {
+          statsToSync.push({
+            playerId: matchedPlayer.id,
+            stats: {
               passingYards: stat.passingYards,
               passingTDs: stat.passingTDs,
               interceptions: 0, // ESPN doesn't give us this in box score
@@ -303,21 +346,19 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               defensiveInterceptions: stat.interceptions,
               fumbleRecoveries: stat.fumbleRecoveries,
               defensiveTDs: stat.defensiveTDs,
-            });
-            synced++;
-          } catch (err) {
-            console.error(`Error syncing ${stat.espnName}:`, err);
-          }
+            }
+          });
         }
       }
-      // Sync kicker stats to Firebase
+
+      // Add kicker stats to batch
       for (const kicker of allKickerStats) {
-        // Find matching kicker in our collection
         const matchedKicker = findPlayer(kicker.espnName, kicker.espnTeam);
 
         if (matchedKicker) {
-          try {
-            await savePlayerStats(weekName, matchedKicker.id, {
+          statsToSync.push({
+            playerId: matchedKicker.id,
+            stats: {
               passingYards: 0,
               passingTDs: 0,
               interceptions: 0,
@@ -337,18 +378,20 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               defensiveInterceptions: 0,
               fumbleRecoveries: 0,
               defensiveTDs: 0,
-            });
-            synced++;
-          } catch (err) {
-            console.error(`Error syncing kicker ${kicker.espnName}:`, err);
-          }
+            }
+          });
         }
       }
+
+      // Batch save all stats in one write operation
+      const synced = await batchSavePlayerStats(weekName, statsToSync);
+      console.log(`[LiveStats] Batch synced ${synced} players to Firebase`);
 
       setSyncCount(synced);
       setLastSync(new Date());
     } catch (err) {
-      console.error('Error fetching live stats:', err);
+      console.error('[LiveStats] Error fetching live stats:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch live stats');
     } finally {
       setLoading(false);
     }
@@ -356,11 +399,14 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
 
   // Fetch stats when players are loaded, live stats enabled, and auto-refresh every 60 seconds
   useEffect(() => {
-    if (players.length === 0 || !liveStatsConfig.enabled) return;
+    if (players.length === 0 || !liveStatsConfig.enabled) {
+      return;
+    }
 
     fetchLiveStats();
 
     const interval = setInterval(() => {
+      setError(null); // Clear error on retry
       fetchLiveStats();
     }, 60000);
 
@@ -388,8 +434,25 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
 
   if (loading && liveStatsConfig.enabled) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
         <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Loading live stats...</p>
+        <p className="text-xs text-gray-400">Players loaded: {players.length}</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+        <h3 className="font-medium text-red-800 mb-2">Error loading live stats</h3>
+        <p className="text-sm text-red-600">{error}</p>
+        <button
+          onClick={() => { setError(null); setLoading(true); }}
+          className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }

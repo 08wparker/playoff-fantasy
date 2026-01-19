@@ -21,6 +21,7 @@ import {
   arrayUnion,
   onSnapshot,
   deleteDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import type { User, WeeklyRoster, UsedPlayers, Player, PlayerStats, PlayoffWeekName, NFLTeam, InjuryStatus } from '../types';
 
@@ -680,6 +681,42 @@ export async function savePlayerStats(
     console.error('Error saving player stats:', error);
     return false;
   }
+}
+
+// Batch save stats for multiple players (reduces Firebase writes)
+export async function batchSavePlayerStats(
+  weekName: PlayoffWeekName,
+  statsArray: { playerId: string; stats: Omit<PlayerStats, 'playerId' | 'week'> }[]
+): Promise<number> {
+  if (statsArray.length === 0) return 0;
+
+  const weekNumber = { wildcard: 1, divisional: 2, championship: 3, superbowl: 4 }[weekName];
+  let saved = 0;
+
+  // Firestore batch limit is 500, so chunk if needed
+  const chunkSize = 500;
+  for (let i = 0; i < statsArray.length; i += chunkSize) {
+    const chunk = statsArray.slice(i, i + chunkSize);
+    const batch = writeBatch(db);
+
+    for (const { playerId, stats } of chunk) {
+      const statsRef = doc(db, 'playerStats', weekName, 'players', playerId);
+      batch.set(statsRef, {
+        ...stats,
+        playerId,
+        week: weekNumber,
+      });
+    }
+
+    try {
+      await batch.commit();
+      saved += chunk.length;
+    } catch (error) {
+      console.error('Error in batch save:', error);
+    }
+  }
+
+  return saved;
 }
 
 // Get all player stats for a specific week

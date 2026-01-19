@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getCachedPlayers, setPlayerInjuryStatus, clearAllInjuryStatuses } from '../../services/firebase';
+import { fetchESPNInjuries, type ESPNInjury } from '../../services/espnApi';
 import type { Player, InjuryStatus, Position } from '../../types';
 
 const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
@@ -8,6 +9,8 @@ export function AdminInjuryReport() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [espnInjuries, setEspnInjuries] = useState<ESPNInjury[]>([]);
   const [search, setSearch] = useState('');
   const [positionFilter, setPositionFilter] = useState<Position | 'all'>('all');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -84,6 +87,61 @@ export function AdminInjuryReport() {
     setSaving(null);
   };
 
+  // Sync injuries from ESPN
+  const handleSyncFromESPN = async () => {
+    setSyncing(true);
+    setMessage(null);
+
+    try {
+      // Fetch injuries from ESPN
+      const injuries = await fetchESPNInjuries();
+      setEspnInjuries(injuries);
+
+      // Build a lookup map of our players by name (lowercase)
+      const playerByName = new Map<string, Player>();
+      for (const player of players) {
+        playerByName.set(player.name.toLowerCase(), player);
+      }
+
+      let updated = 0;
+      let notFound = 0;
+
+      // Match ESPN injuries to our players and update status
+      for (const injury of injuries) {
+        const nameLower = injury.playerName.toLowerCase();
+        const player = playerByName.get(nameLower);
+
+        if (player) {
+          // Only update if status is different
+          if (player.injuryStatus !== injury.status) {
+            const success = await setPlayerInjuryStatus(player.id, injury.status);
+            if (success) {
+              updated++;
+              // Update local state
+              setPlayers(prev => prev.map(p =>
+                p.id === player.id
+                  ? { ...p, injuryStatus: injury.status }
+                  : p
+              ));
+            }
+          }
+        } else {
+          notFound++;
+        }
+      }
+
+      setMessage({
+        type: 'success',
+        text: `Synced ${injuries.length} injuries from ESPN. Updated ${updated} players.${notFound > 0 ? ` (${notFound} not in roster)` : ''}`
+      });
+    } catch (error) {
+      console.error('Error syncing from ESPN:', error);
+      setMessage({ type: 'error', text: 'Failed to sync from ESPN' });
+    }
+
+    setSyncing(false);
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -106,9 +164,57 @@ export function AdminInjuryReport() {
         )}
       </div>
 
-      <p className="text-sm text-gray-600 mb-4">
-        Mark players as questionable or out. This will display an indicator on player selection.
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-600">
+          Mark players as questionable or out. This will display an indicator on player selection.
+        </p>
+        <button
+          onClick={handleSyncFromESPN}
+          disabled={syncing}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          {syncing ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <span>🔄</span>
+              Sync from ESPN
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* ESPN Injuries Preview (shown after sync) */}
+      {espnInjuries.length > 0 && (
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="font-semibold text-blue-800 mb-2">
+            ESPN Injuries ({espnInjuries.length} total)
+          </h3>
+          <div className="max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-2">
+              {espnInjuries.slice(0, 30).map((inj, idx) => (
+                <span
+                  key={idx}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                    inj.status === 'out'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
+                >
+                  {inj.playerName} ({inj.team})
+                  <span className="font-bold">{inj.status === 'out' ? 'OUT' : 'Q'}</span>
+                </span>
+              ))}
+              {espnInjuries.length > 30 && (
+                <span className="text-xs text-blue-600">+{espnInjuries.length - 30} more</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Current Injuries Summary */}
       {injuredPlayers.length > 0 && (

@@ -1,4 +1,4 @@
-import type { Player, NFLTeam, Position, PlayerStats } from '../types';
+import type { Player, NFLTeam, Position, PlayerStats, InjuryStatus } from '../types';
 
 // ESPN API endpoints (unofficial)
 const ESPN_BASE_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
@@ -217,4 +217,79 @@ export async function fetchESPNPlayersForTeams(teams: NFLTeam[]): Promise<Map<st
   }
 
   return playerMap;
+}
+
+// ESPN injury status mapping to our InjuryStatus type
+function mapESPNInjuryStatus(espnStatus: string): InjuryStatus | null {
+  switch (espnStatus.toLowerCase()) {
+    case 'out':
+    case 'injured reserve':
+    case 'ir':
+      return 'out';
+    case 'questionable':
+    case 'doubtful':
+      return 'questionable';
+    default:
+      return null; // Active, Day-To-Day, etc. - no injury designation
+  }
+}
+
+// Injury data from ESPN
+export interface ESPNInjury {
+  playerName: string;
+  playerId: string;
+  team: NFLTeam;
+  status: InjuryStatus;
+  espnStatus: string;
+  comment?: string;
+}
+
+// Fetch all NFL injuries from ESPN
+export async function fetchESPNInjuries(): Promise<ESPNInjury[]> {
+  const injuries: ESPNInjury[] = [];
+
+  try {
+    const response = await fetch(`${ESPN_BASE_URL}/injuries`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch injuries: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    for (const teamData of data.injuries || []) {
+      // Get team abbreviation from team ID
+      const teamId = teamData.id;
+      const team = ESPN_ID_TO_TEAM[teamId];
+      if (!team) continue;
+
+      for (const injury of teamData.injuries || []) {
+        const espnStatus = injury.status || '';
+        const mappedStatus = mapESPNInjuryStatus(espnStatus);
+
+        // Only include players with actual injury designations
+        if (mappedStatus) {
+          const athlete = injury.athlete || {};
+          injuries.push({
+            playerName: athlete.displayName || '',
+            playerId: athlete.id || '',
+            team,
+            status: mappedStatus,
+            espnStatus,
+            comment: injury.shortComment,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching ESPN injuries:', error);
+  }
+
+  return injuries;
+}
+
+// Fetch injuries for specific teams only
+export async function fetchESPNInjuriesForTeams(teams: NFLTeam[]): Promise<ESPNInjury[]> {
+  const allInjuries = await fetchESPNInjuries();
+  const teamSet = new Set(teams);
+  return allInjuries.filter(inj => teamSet.has(inj.team));
 }
