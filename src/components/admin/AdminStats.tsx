@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { savePlayerStats, getAllPlayerStatsForWeek, getCachedPlayers, clearAllPlayerStatsForWeek } from '../../services/firebase';
+import { savePlayerStats, getAllPlayerStatsForWeek, getCachedPlayers, clearAllPlayerStatsForWeek, batchSavePlayerStats } from '../../services/firebase';
+import { fetchNFLScoreboard, fetchGameBoxScore, toPlayerStats } from '../../services/espn';
 import type { Player, PlayerStats, PlayoffWeekName, Position } from '../../types';
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 
@@ -167,6 +168,7 @@ export function AdminStats() {
   const [savingPlayers, setSavingPlayers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Load players and existing stats
@@ -272,6 +274,200 @@ export function AdminStats() {
     setTimeout(() => setMessage(null), 3000);
   }, [selectedWeek]);
 
+  // Re-sync stats from ESPN
+  const handleResyncFromESPN = useCallback(async () => {
+    if (!confirm(`Re-sync ALL stats for ${PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]} from ESPN? This will overwrite existing stats.`)) {
+      return;
+    }
+
+    setSyncing(true);
+    setMessage({ type: 'success', text: 'Fetching games from ESPN...' });
+
+    try {
+      const weekNumber = { wildcard: 1, divisional: 2, championship: 3, superbowl: 4 }[selectedWeek];
+
+      // Fetch scoreboard for the week
+      const games = await fetchNFLScoreboard(weekNumber);
+      console.log(`[AdminStats] Found ${games.length} games for ${selectedWeek}`);
+
+      // Fetch box scores for completed games
+      const statsToSync: { playerId: string; stats: Omit<PlayerStats, 'playerId' | 'week'> }[] = [];
+      let gamesProcessed = 0;
+
+      for (const game of games) {
+        const status = game.status?.type?.state;
+        if (status === 'in' || status === 'post') {
+          setMessage({ type: 'success', text: `Processing ${game.shortName}...` });
+
+          const boxScore = await fetchGameBoxScore(game.id);
+          if (!boxScore) continue;
+
+          gamesProcessed++;
+
+          // Process player stats
+          for (const espnPlayer of boxScore.players) {
+            const stats = toPlayerStats(espnPlayer, '', weekNumber);
+
+            // Find matching player in our collection
+            const matchedPlayer = findPlayerByName(espnPlayer.name, espnPlayer.team, players);
+            if (matchedPlayer) {
+              statsToSync.push({
+                playerId: matchedPlayer.id,
+                stats: {
+                  passingYards: stats.passingYards,
+                  passingTDs: stats.passingTDs,
+                  interceptions: stats.interceptions,
+                  rushingYards: stats.rushingYards,
+                  rushingTDs: stats.rushingTDs,
+                  receptions: stats.receptions,
+                  receivingYards: stats.receivingYards,
+                  receivingTDs: stats.receivingTDs,
+                  fg0_39: 0,
+                  fg40_49: 0,
+                  fg50Plus: 0,
+                  fgMissed: 0,
+                  xpMade: 0,
+                  xpMissed: 0,
+                  pointsAllowed: 0,
+                  sacks: 0,
+                  defensiveInterceptions: 0,
+                  fumbleRecoveries: 0,
+                  defensiveTDs: 0,
+                }
+              });
+            }
+          }
+
+          // Process defense stats
+          for (const defense of boxScore.defenseStats) {
+            const defensePlayer = players.find(
+              p => p.team === defense.team && (p.position === 'DST' || p.name.includes('Defense'))
+            );
+            if (defensePlayer) {
+              statsToSync.push({
+                playerId: defensePlayer.id,
+                stats: {
+                  passingYards: 0,
+                  passingTDs: 0,
+                  interceptions: 0,
+                  rushingYards: 0,
+                  rushingTDs: 0,
+                  receptions: 0,
+                  receivingYards: 0,
+                  receivingTDs: 0,
+                  fg0_39: 0,
+                  fg40_49: 0,
+                  fg50Plus: 0,
+                  fgMissed: 0,
+                  xpMade: 0,
+                  xpMissed: 0,
+                  pointsAllowed: defense.pointsAllowed,
+                  sacks: defense.sacks,
+                  defensiveInterceptions: defense.interceptions,
+                  fumbleRecoveries: defense.fumbleRecoveries,
+                  defensiveTDs: defense.defensiveTDs,
+                }
+              });
+            }
+          }
+
+          // Process kicker stats
+          for (const kicker of boxScore.kickerStats) {
+            const kickerPlayer = findPlayerByName(kicker.name, kicker.team, players);
+            if (kickerPlayer) {
+              statsToSync.push({
+                playerId: kickerPlayer.id,
+                stats: {
+                  passingYards: 0,
+                  passingTDs: 0,
+                  interceptions: 0,
+                  rushingYards: 0,
+                  rushingTDs: 0,
+                  receptions: 0,
+                  receivingYards: 0,
+                  receivingTDs: 0,
+                  fg0_39: kicker.fg0_39,
+                  fg40_49: kicker.fg40_49,
+                  fg50Plus: kicker.fg50Plus,
+                  fgMissed: kicker.fgMissed,
+                  xpMade: kicker.xpMade,
+                  xpMissed: kicker.xpMissed,
+                  pointsAllowed: 0,
+                  sacks: 0,
+                  defensiveInterceptions: 0,
+                  fumbleRecoveries: 0,
+                  defensiveTDs: 0,
+                }
+              });
+            }
+          }
+        }
+      }
+
+      // Batch save all stats
+      setMessage({ type: 'success', text: `Saving ${statsToSync.length} player stats...` });
+      const saved = await batchSavePlayerStats(selectedWeek, statsToSync);
+
+      // Refresh the UI with new stats
+      const weekStats = await getAllPlayerStatsForWeek(selectedWeek);
+      const originalMap = new Map<string, PlayerStats>();
+      const statsMap = new Map<string, Omit<PlayerStats, 'playerId' | 'week'>>();
+
+      weekStats.forEach(s => {
+        originalMap.set(s.playerId, s);
+        const { playerId, week, ...rest } = s;
+        statsMap.set(s.playerId, rest);
+      });
+
+      setOriginalStats(originalMap);
+      setPlayerStats(statsMap);
+
+      setMessage({ type: 'success', text: `Synced ${saved} players from ${gamesProcessed} games` });
+    } catch (error) {
+      console.error('Error re-syncing from ESPN:', error);
+      setMessage({ type: 'error', text: 'Failed to sync from ESPN' });
+    }
+
+    setSyncing(false);
+    setTimeout(() => setMessage(null), 5000);
+  }, [selectedWeek, players]);
+
+  // Helper function to find player by name
+  function findPlayerByName(espnName: string, espnTeam: string, playerList: Player[]): Player | null {
+    const normalize = (name: string) =>
+      name.toLowerCase()
+        .replace(/[^a-z\s]/g, '')
+        .replace(/\s+(jr|sr|iii|ii|iv|v)(\s|$)/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const normalizedEspnName = normalize(espnName);
+
+    // Try exact match first
+    for (const player of playerList) {
+      if (normalize(player.name) === normalizedEspnName && player.team === espnTeam) {
+        return player;
+      }
+    }
+
+    // Try first + last name match
+    const espnParts = normalizedEspnName.split(' ');
+    const espnFirstName = espnParts[0] || '';
+    const espnLastName = espnParts[espnParts.length - 1] || '';
+
+    for (const player of playerList) {
+      const ourParts = normalize(player.name).split(' ');
+      const ourFirstName = ourParts[0] || '';
+      const ourLastName = ourParts[ourParts.length - 1] || '';
+
+      if (ourFirstName === espnFirstName && ourLastName === espnLastName && player.team === espnTeam) {
+        return player;
+      }
+    }
+
+    return null;
+  }
+
   // Filter and group players
   const filteredPlayers = players.filter(p => p.position === selectedPosition);
   const playersByTeam = filteredPlayers.reduce((acc, player) => {
@@ -344,11 +540,25 @@ export function AdminStats() {
             {playersWithStats} of {filteredPlayers.length} {selectedPosition}s have stats for {PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]}
           </span>
           <button
+            onClick={handleResyncFromESPN}
+            disabled={syncing}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-blue-700 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {syncing ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>Re-sync from ESPN</>
+            )}
+          </button>
+          <button
             onClick={handleClearStats}
             disabled={clearing || playersWithStats === 0}
             className="px-3 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {clearing ? 'Clearing...' : `Clear All ${PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]} Stats`}
+            {clearing ? 'Clearing...' : 'Clear All Stats'}
           </button>
         </div>
         {message && (
