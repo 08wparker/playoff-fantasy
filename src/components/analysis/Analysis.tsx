@@ -5,16 +5,24 @@ import type { Player, WeeklyRoster, Position, PlayoffWeekName, PlayerStats, User
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 
 const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
-// Only show wildcard for now
 const WEEKS: { week: number; name: PlayoffWeekName }[] = [
   { week: 1, name: 'wildcard' },
-  // { week: 2, name: 'divisional' },
+  { week: 2, name: 'divisional' },
   // { week: 3, name: 'championship' },
   // { week: 4, name: 'superbowl' },
 ];
 
+// Stats weeks that have completed
+const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
+  { week: 1, name: 'wildcard', label: 'Wild Card' },
+  { week: 2, name: 'divisional', label: 'Divisional' },
+];
+
 // Teams eliminated after Wild Card round (lost their game)
-const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['JAX', 'PHI', 'LAC', 'PIT', 'CAR', 'GB']);
+const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['DEN', 'PIT', 'HOU', 'LAC', 'TB', 'GB', 'MIN', 'WAS']);
+
+// Teams eliminated after Divisional round
+const ELIMINATED_TEAMS_AFTER_DIVISIONAL = new Set(['HOU', 'BAL', 'DET', 'PHI']);
 
 // Roster slots in order
 const ROSTER_SLOTS = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'dst', 'k'] as const;
@@ -36,9 +44,11 @@ interface TopScorersChartProps {
   position: Position;
   playerScores: PlayerScore[];
   maxPoints: number;
+  eliminatedTeams: Set<string>;
+  availableLabel: string;
 }
 
-function TopScorersChart({ position, playerScores, maxPoints }: TopScorersChartProps) {
+function TopScorersChart({ position, playerScores, maxPoints, eliminatedTeams, availableLabel }: TopScorersChartProps) {
   if (playerScores.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -77,7 +87,7 @@ function TopScorersChart({ position, playerScores, maxPoints }: TopScorersChartP
           <div className="relative flex justify-around" style={{ height: chartHeight }}>
             {playerScores.slice(0, 10).map(({ player, points }) => {
               const heightPercent = (points / maxPoints) * 100;
-              const isEliminated = ELIMINATED_TEAMS_AFTER_WILDCARD.has(player.team);
+              const isEliminated = eliminatedTeams.has(player.team);
               return (
                 <div
                   key={player.id}
@@ -129,7 +139,7 @@ function TopScorersChart({ position, playerScores, maxPoints }: TopScorersChartP
                         <div className="font-semibold">{player.name}</div>
                         <div className="text-primary-300">{points.toFixed(1)} points</div>
                         <div className={isEliminated ? 'text-red-400' : 'text-green-400'}>
-                          {isEliminated ? '❌ Eliminated' : '✅ Still available'}
+                          {isEliminated ? '❌ Eliminated' : `✅ Available for ${availableLabel}`}
                         </div>
                       </div>
                     </div>
@@ -363,10 +373,11 @@ function PositionBarChart({ position, playerCounts, maxCount }: PositionBarChart
 export function Analysis() {
   const [selectedWeek, setSelectedWeek] = useState<number | 'all'>(1);
   const [selectedPosition, setSelectedPosition] = useState<Position>('QB');
+  const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(2); // Default to most recent
   const [rosters, setRosters] = useState<Map<number, WeeklyRoster[]>>(new Map());
   const [players, setPlayers] = useState<Player[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [playerStats, setPlayerStats] = useState<Map<string, PlayerStats>>(new Map());
+  const [playerStatsByWeek, setPlayerStatsByWeek] = useState<Map<number, Map<string, PlayerStats>>>(new Map());
   const [loading, setLoading] = useState(true);
 
   // Load all rosters, players, users, and stats
@@ -374,22 +385,33 @@ export function Analysis() {
     async function loadData() {
       setLoading(true);
       try {
-        const [fetchedPlayers, fetchedUsers, wildcardStats, ...weekRosters] = await Promise.all([
+        const [fetchedPlayers, fetchedUsers, wildcardStats, divisionalStats, ...weekRosters] = await Promise.all([
           getCachedPlayers(),
           getAllUsers(),
           getAllPlayerStatsForWeek('wildcard'),
+          getAllPlayerStatsForWeek('divisional'),
           ...WEEKS.map(w => getAllRostersForWeek(w.week)),
         ]);
 
         setPlayers(fetchedPlayers);
         setUsers(fetchedUsers);
 
-        // Build stats map
-        const statsMap = new Map<string, PlayerStats>();
+        // Build stats map per week
+        const statsByWeek = new Map<number, Map<string, PlayerStats>>();
+
+        const wildcardMap = new Map<string, PlayerStats>();
         wildcardStats.forEach(stat => {
-          statsMap.set(stat.playerId, stat);
+          wildcardMap.set(stat.playerId, stat);
         });
-        setPlayerStats(statsMap);
+        statsByWeek.set(1, wildcardMap);
+
+        const divisionalMap = new Map<string, PlayerStats>();
+        divisionalStats.forEach(stat => {
+          divisionalMap.set(stat.playerId, stat);
+        });
+        statsByWeek.set(2, divisionalMap);
+
+        setPlayerStatsByWeek(statsByWeek);
 
         const rosterMap = new Map<number, WeeklyRoster[]>();
         WEEKS.forEach((w, idx) => {
@@ -480,6 +502,21 @@ export function Analysis() {
     return max;
   }, [countsByPosition]);
 
+  // Get current stats map based on selected week
+  const currentPlayerStats = useMemo(() => {
+    return playerStatsByWeek.get(selectedStatsWeek) || new Map<string, PlayerStats>();
+  }, [playerStatsByWeek, selectedStatsWeek]);
+
+  // Get eliminated teams based on selected stats week
+  const currentEliminatedTeams = useMemo(() => {
+    return selectedStatsWeek === 1 ? ELIMINATED_TEAMS_AFTER_WILDCARD : ELIMINATED_TEAMS_AFTER_DIVISIONAL;
+  }, [selectedStatsWeek]);
+
+  // Get next round name
+  const nextRoundLabel = useMemo(() => {
+    return selectedStatsWeek === 1 ? 'Divisional' : 'Championship';
+  }, [selectedStatsWeek]);
+
   // Calculate top scorers by position
   const topScorersByPosition = useMemo(() => {
     const result: Record<Position, PlayerScore[]> = {
@@ -492,7 +529,7 @@ export function Analysis() {
     };
 
     players.forEach(player => {
-      const stats = playerStats.get(player.id);
+      const stats = currentPlayerStats.get(player.id);
       if (stats) {
         const points = calculatePoints(stats, undefined, player.position);
         if (points > 0) {
@@ -507,19 +544,19 @@ export function Analysis() {
     }
 
     return result;
-  }, [players, playerStats]);
+  }, [players, currentPlayerStats]);
 
   // Build user lookup map
   const userMap = useMemo(() => {
     return new Map(users.map(u => [u.uid, u]));
   }, [users]);
 
-  // Calculate top 3 rosters with full breakdown
+  // Calculate top 5 rosters with full breakdown for selected stats week
   const topRostersData = useMemo(() => {
-    const wildcardRosters = rosters.get(1) || [];
+    const weekRosters = rosters.get(selectedStatsWeek) || [];
 
     // Calculate points for each roster
-    const rosterScores = wildcardRosters.map(roster => {
+    const rosterScores = weekRosters.map(roster => {
       const user = userMap.get(roster.odId);
       if (!user) return null;
 
@@ -530,7 +567,7 @@ export function Analysis() {
         const playerId = roster[slot];
         if (playerId) {
           const player = playerMap.get(playerId);
-          const stats = playerStats.get(playerId);
+          const stats = currentPlayerStats.get(playerId);
           if (player) {
             const points = stats ? calculatePoints(stats, undefined, player.position) : 0;
             totalPoints += points;
@@ -546,7 +583,7 @@ export function Analysis() {
     rosterScores.sort((a, b) => b.totalPoints - a.totalPoints);
 
     return rosterScores.slice(0, 5);
-  }, [rosters, userMap, playerMap, playerStats]);
+  }, [rosters, selectedStatsWeek, userMap, playerMap, currentPlayerStats]);
 
   // Calculate consensus players (picked by 3+ of top 5)
   const consensusPlayers = useMemo(() => {
@@ -570,8 +607,8 @@ export function Analysis() {
   const galaxyBrainPicks = useMemo(() => {
     const picks: { user: User; player: Player; points: number; selectionRate: number; positionRank: number }[] = [];
 
-    // Get all wildcard rosters
-    const allRosters = rosters.get(1) || [];
+    // Get rosters for selected stats week
+    const allRosters = rosters.get(selectedStatsWeek) || [];
     const totalRosterCount = allRosters.length;
     if (totalRosterCount === 0) return [];
 
@@ -600,11 +637,11 @@ export function Analysis() {
         if (!playerId) continue;
 
         const player = playerMap.get(playerId);
-        const stats = playerStats.get(playerId);
+        const stats = currentPlayerStats.get(playerId);
         if (!player) continue;
 
         const points = stats ? calculatePoints(stats, undefined, player.position) : 0;
-        const isEliminated = ELIMINATED_TEAMS_AFTER_WILDCARD.has(player.team);
+        const isEliminated = currentEliminatedTeams.has(player.team);
         const isTop5AtPosition = top5ByPosition.get(player.position)?.has(player.id) || false;
         const selectionCount = playerCounts.get(player.id) || 0;
         const selectionRate = selectionCount / totalRosterCount;
@@ -628,7 +665,7 @@ export function Analysis() {
       seen.add(key);
       return true;
     });
-  }, [rosters, userMap, playerMap, playerStats, playerCounts, topScorersByPosition]);
+  }, [rosters, selectedStatsWeek, userMap, playerMap, currentPlayerStats, currentEliminatedTeams, playerCounts, topScorersByPosition]);
 
   // Get total rosters for context
   const totalRosters = useMemo(() => {
@@ -689,9 +726,26 @@ export function Analysis() {
         ))}
       </div>
 
-      {/* Top Scorers Section */}
+      {/* Previous Week Stats Section */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Scorers (Wild Card)</h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Previous Week Stats</h3>
+
+        {/* Week Tabs */}
+        <div className="flex gap-2 mb-4">
+          {STATS_WEEKS.map(sw => (
+            <button
+              key={sw.week}
+              onClick={() => setSelectedStatsWeek(sw.week)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                selectedStatsWeek === sw.week
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {sw.label}
+            </button>
+          ))}
+        </div>
 
         {/* Position Selector */}
         <div className="flex gap-2 mb-4">
@@ -714,7 +768,7 @@ export function Analysis() {
         <div className="flex gap-6 mb-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
-            <span className="text-gray-600">Still available for Divisional</span>
+            <span className="text-gray-600">Still available for {nextRoundLabel}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">✗</div>
@@ -727,13 +781,17 @@ export function Analysis() {
           position={selectedPosition}
           playerScores={topScorersByPosition[selectedPosition]}
           maxPoints={topScorersByPosition[selectedPosition][0]?.points || 1}
+          eliminatedTeams={currentEliminatedTeams}
+          availableLabel={nextRoundLabel}
         />
       </div>
 
       {/* What Did the Winners Pick Section */}
       {topRostersData.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">What Did the Winners Pick? (Wild Card)</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            What Did the Winners Pick? ({STATS_WEEKS.find(sw => sw.week === selectedStatsWeek)?.label})
+          </h3>
           <WinningRosters
             topRosters={topRostersData}
             consensusPlayers={consensusPlayers}
