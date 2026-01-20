@@ -25,6 +25,7 @@ interface PlayerLiveStats {
   fantasyPoints: number;
   passingYards: number;
   passingTDs: number;
+  qbInterceptions: number; // QB interceptions thrown
   rushingYards: number;
   rushingTDs: number;
   receptions: number;
@@ -33,7 +34,7 @@ interface PlayerLiveStats {
   isDefense: boolean;
   pointsAllowed: number;
   sacks: number;
-  interceptions: number;
+  interceptions: number; // Defensive interceptions caught
   fumbleRecoveries: number;
   defensiveTDs: number;
 }
@@ -237,6 +238,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               fantasyPoints: calculatePoints(stats, undefined, position),
               passingYards: stats.passingYards,
               passingTDs: stats.passingTDs,
+              qbInterceptions: stats.interceptions, // QB interceptions thrown
               rushingYards: stats.rushingYards,
               rushingTDs: stats.rushingTDs,
               receptions: stats.receptions,
@@ -263,6 +265,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
             fantasyPoints: calculatePoints(stats, undefined, 'DST'),
             passingYards: 0,
             passingTDs: 0,
+            qbInterceptions: 0,
             rushingYards: 0,
             rushingTDs: 0,
             receptions: 0,
@@ -329,7 +332,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
             stats: {
               passingYards: stat.passingYards,
               passingTDs: stat.passingTDs,
-              interceptions: 0, // ESPN doesn't give us this in box score
+              interceptions: stat.qbInterceptions, // QB interceptions thrown
               rushingYards: stat.rushingYards,
               rushingTDs: stat.rushingTDs,
               receptions: stat.receptions,
@@ -343,7 +346,7 @@ export function LiveStats({ currentWeek }: LiveStatsProps) {
               xpMissed: 0,
               pointsAllowed: stat.pointsAllowed,
               sacks: stat.sacks,
-              defensiveInterceptions: stat.interceptions,
+              defensiveInterceptions: stat.interceptions, // Defensive INTs caught
               fumbleRecoveries: stat.fumbleRecoveries,
               defensiveTDs: stat.defensiveTDs,
             }
