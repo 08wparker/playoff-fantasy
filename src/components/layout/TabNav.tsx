@@ -1,4 +1,4 @@
-export type TabType = 'roster' | 'wildcard-stats' | 'live' | 'scores' | 'analysis' | 'admin';
+export type TabType = 'roster' | 'previous-stats' | 'live' | 'scores' | 'analysis' | 'admin';
 
 interface TabNavProps {
   activeTab: TabType;
@@ -23,17 +23,17 @@ export function TabNav({ activeTab, onTabChange, showAdmin = false, weekName, cu
           >
             Set Roster {weekName ? `(${weekName})` : ''}
           </button>
-          {/* Show Wild Card Stats tab after wildcard week */}
+          {/* Show Previous Stats tab after wildcard week */}
           {currentWeek > 1 && (
             <button
-              onClick={() => onTabChange('wildcard-stats')}
+              onClick={() => onTabChange('previous-stats')}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                activeTab === 'wildcard-stats'
+                activeTab === 'previous-stats'
                   ? 'border-primary-600 text-primary-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Wild Card Stats
+              Previous Stats
             </button>
           )}
           <button

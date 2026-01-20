@@ -86,8 +86,8 @@ function AppContent() {
           onSetPlayer={setPlayerForSlot}
           onSave={saveCurrentRoster}
         />
-      ) : activeTab === 'wildcard-stats' ? (
-        <WeeklyPlayerStats weekName="wildcard" />
+      ) : activeTab === 'previous-stats' ? (
+        <WeeklyPlayerStats currentWeek={currentWeek} />
       ) : activeTab === 'live' ? (
         <LiveStats currentWeek={currentWeek} />
       ) : activeTab === 'scores' ? (

@@ -5,7 +5,7 @@ import { getCachedPlayers, getAllPlayerStatsForWeek, getPlayoffConfig } from '..
 import { calculatePoints } from '../../services/scoring';
 
 interface WeeklyPlayerStatsProps {
-  weekName: PlayoffWeekName;
+  currentWeek: number;
 }
 
 interface DisplayStats {
@@ -14,28 +14,50 @@ interface DisplayStats {
   fantasyPoints: number;
 }
 
-// Game scores for wildcard round (hardcoded since games are final)
-const WILDCARD_GAMES = [
-  { shortName: 'LAR @ CAR', awayScore: 34, homeScore: 31 },
-  { shortName: 'GB @ CHI', awayScore: 27, homeScore: 31 },
-  { shortName: 'BUF @ JAX', awayScore: 27, homeScore: 24 },
-  { shortName: 'SF @ PHI', awayScore: 23, homeScore: 19 },
-  { shortName: 'LAC @ NE', awayScore: 3, homeScore: 16 },
-  { shortName: 'HOU @ PIT', awayScore: 30, homeScore: 6 },
+// Available weeks for stats (completed rounds)
+const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
+  { week: 1, name: 'wildcard', label: 'Wild Card' },
+  { week: 2, name: 'divisional', label: 'Divisional' },
 ];
 
-export function WeeklyPlayerStats({ weekName }: WeeklyPlayerStatsProps) {
+// Game scores by round (hardcoded since games are final)
+const GAMES_BY_WEEK: Record<PlayoffWeekName, { shortName: string; awayScore: number; homeScore: number }[]> = {
+  wildcard: [
+    { shortName: 'LAR @ CAR', awayScore: 34, homeScore: 31 },
+    { shortName: 'GB @ CHI', awayScore: 27, homeScore: 31 },
+    { shortName: 'BUF @ JAX', awayScore: 27, homeScore: 24 },
+    { shortName: 'SF @ PHI', awayScore: 23, homeScore: 19 },
+    { shortName: 'LAC @ NE', awayScore: 3, homeScore: 16 },
+    { shortName: 'HOU @ PIT', awayScore: 30, homeScore: 6 },
+  ],
+  divisional: [
+    { shortName: 'DEN @ NE', awayScore: 24, homeScore: 30 },
+    { shortName: 'HOU @ BUF', awayScore: 14, homeScore: 31 },
+    { shortName: 'CHI @ SEA', awayScore: 21, homeScore: 28 },
+    { shortName: 'SF @ LAR', awayScore: 21, homeScore: 28 },
+  ],
+  championship: [],
+  superbowl: [],
+};
+
+export function WeeklyPlayerStats({ currentWeek }: WeeklyPlayerStatsProps) {
+  // Filter to only show completed weeks (weeks before current)
+  const availableWeeks = STATS_WEEKS.filter(w => w.week < currentWeek);
+  const [selectedWeek, setSelectedWeek] = useState<PlayoffWeekName>(
+    availableWeeks.length > 0 ? availableWeeks[availableWeeks.length - 1].name : 'wildcard'
+  );
   const [stats, setStats] = useState<DisplayStats[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
         // Load players and stats in parallel
         const [allPlayers, weekStats, weekTeams] = await Promise.all([
           getCachedPlayers(),
-          getAllPlayerStatsForWeek(weekName),
-          getPlayoffConfig(weekName),
+          getAllPlayerStatsForWeek(selectedWeek),
+          getPlayoffConfig(selectedWeek),
         ]);
 
         // Create a map of player stats by playerId
@@ -68,7 +90,7 @@ export function WeeklyPlayerStats({ weekName }: WeeklyPlayerStatsProps) {
     }
 
     loadData();
-  }, [weekName]);
+  }, [selectedWeek]);
 
   // Split stats by position category
   const offensiveStats = stats.filter(s => ['QB', 'RB', 'WR', 'TE'].includes(s.player.position));
@@ -83,16 +105,18 @@ export function WeeklyPlayerStats({ weekName }: WeeklyPlayerStatsProps) {
     );
   }
 
+  const currentGames = GAMES_BY_WEEK[selectedWeek] || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            {PLAYOFF_WEEK_DISPLAY_NAMES[weekName]} Player Stats
+            Previous Week Stats
           </h2>
           <p className="text-sm text-gray-500">
-            Final player stats for {PLAYOFF_WEEK_DISPLAY_NAMES[weekName]}
+            Final player stats for completed playoff rounds
           </p>
         </div>
         <div className="text-right">
@@ -100,12 +124,31 @@ export function WeeklyPlayerStats({ weekName }: WeeklyPlayerStatsProps) {
         </div>
       </div>
 
+      {/* Week Tabs */}
+      {availableWeeks.length > 1 && (
+        <div className="flex gap-2">
+          {availableWeeks.map(w => (
+            <button
+              key={w.week}
+              onClick={() => setSelectedWeek(w.name)}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                selectedWeek === w.name
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Games Overview */}
-      {weekName === 'wildcard' && (
+      {currentGames.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <h3 className="font-medium text-gray-800 mb-3">Games</h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {WILDCARD_GAMES.map((game) => (
+            {currentGames.map((game) => (
               <div
                 key={game.shortName}
                 className="p-3 border border-gray-200 rounded-lg"
@@ -323,7 +366,7 @@ export function WeeklyPlayerStats({ weekName }: WeeklyPlayerStatsProps) {
       {/* Empty state */}
       {stats.length === 0 && (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-500">No stats available for {PLAYOFF_WEEK_DISPLAY_NAMES[weekName]}</p>
+          <p className="text-gray-500">No stats available for {PLAYOFF_WEEK_DISPLAY_NAMES[selectedWeek]}</p>
         </div>
       )}
     </div>
