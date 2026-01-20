@@ -1,0 +1,60 @@
+player,position,team,rank
+Matthew Stafford,QB,LAR,1
+Drake Maye,QB,NE,2
+Sam Darnold,QB,SEA,3
+Jarrett Stidham,QB,DEN,4
+Jimmy Garoppolo,QB,LAR,5
+Kenneth Walker III,RB,SEA,1
+Kyren Williams,RB,LAR,2
+RJ Harvey,RB,DEN,3
+Rhamondre Stevenson,RB,NE,4
+TreVeyon Henderson,RB,NE,5
+Blake Corum,RB,LAR,6
+Jaleel McLaughlin,RB,DEN,7
+Zach Charbonnet,RB,SEA,8
+J.K. Dobbins,RB,DEN,9
+Ronnie Rivers,RB,LAR,10
+Tyler Badie,RB,DEN,11
+Jarquez Hunter,RB,LAR,12
+Adam Prentice,RB,DEN,13
+Jaxon Smith-Njigba,WR,SEA,1
+Puka Nacua,WR,LAR,2
+Davante Adams,WR,LAR,3
+Courtland Sutton,WR,DEN,4
+Stefon Diggs,WR,NE,5
+Kayshon Boutte,WR,NE,6
+Cooper Kupp,WR,SEA,7
+Marvin Mims Jr.,WR,DEN,8
+Troy Franklin,WR,DEN,9
+Rashid Shaheed,WR,SEA,10
+Kyle Williams,WR,NE,11
+Pat Bryant,WR,DEN,12
+DeMario Douglas,WR,NE,13
+Jordan Whittington,WR,LAR,14
+Lil'Jordan Humphrey,WR,DEN,15
+Konata Mumpfield,WR,LAR,16
+Efton Chism III,WR,NE,17
+Velus Jones Jr.,WR,SEA,18
+Tutu Atwell,WR,LAR,19
+Jake Bobo,WR,SEA,20
+Xavier Smith,WR,LAR,21
+Dareke Young,WR,SEA,22
+Hunter Henry,TE,NE,1
+AJ Barner,TE,SEA,2
+Colby Parkinson,TE,LAR,3
+Terrance Ferguson,TE,LAR,4
+Tyler Higbee,TE,LAR,5
+Evan Engram,TE,DEN,6
+Austin Hooper,TE,NE,7
+Adam Trautman,TE,DEN,8
+Nate Adkins,TE,DEN,9
+Davis Allen,TE,LAR,10
+Eric Saubert,TE,SEA,11
+NE Defense,DST,NE,1
+DEN Defense,DST,DEN,2
+SEA Defense,DST,SEA,3
+LAR Defense,DST,LAR,4
+Jason Myers,K,SEA,1
+Andy Borregales,K,NE,2
+Wil Lutz,K,DEN,3
+Harrison Mevis,K,LAR,4
