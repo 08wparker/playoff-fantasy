@@ -31,10 +31,10 @@ const GAMES_BY_WEEK: Record<PlayoffWeekName, { shortName: string; awayScore: num
     { shortName: 'HOU @ PIT', awayScore: 30, homeScore: 6 },
   ],
   divisional: [
-    { shortName: 'DEN @ NE', awayScore: 24, homeScore: 30 },
-    { shortName: 'HOU @ BUF', awayScore: 14, homeScore: 31 },
-    { shortName: 'CHI @ SEA', awayScore: 21, homeScore: 28 },
-    { shortName: 'SF @ LAR', awayScore: 21, homeScore: 28 },
+    { shortName: 'BUF @ DEN', awayScore: 30, homeScore: 33 },  // OT
+    { shortName: 'HOU @ NE', awayScore: 16, homeScore: 28 },
+    { shortName: 'SF @ SEA', awayScore: 6, homeScore: 41 },
+    { shortName: 'CHI @ LAR', awayScore: 17, homeScore: 20 },  // OT
   ],
   championship: [],
   superbowl: [],
