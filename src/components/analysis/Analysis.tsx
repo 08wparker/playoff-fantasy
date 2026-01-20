@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { getAllRostersForWeek, getCachedPlayers, getAllPlayerStatsForWeek, getAllUsers } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
 import type { Player, WeeklyRoster, Position, PlayoffWeekName, PlayerStats, User } from '../../types';
-import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 
 const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
 const WEEKS: { week: number; name: PlayoffWeekName }[] = [
@@ -19,10 +18,12 @@ const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
 ];
 
 // Teams eliminated after Wild Card round (lost their game)
-const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['DEN', 'PIT', 'HOU', 'LAC', 'TB', 'GB', 'MIN', 'WAS']);
+// Divisional teams are: BUF, DEN, NE, HOU, CHI, LAR, SEA, SF
+const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['PIT', 'LAC', 'TB', 'GB', 'MIN', 'WAS']);
 
-// Teams eliminated after Divisional round
-const ELIMINATED_TEAMS_AFTER_DIVISIONAL = new Set(['HOU', 'BAL', 'DET', 'PHI']);
+// Teams eliminated after Divisional round (not in championship)
+// Championship teams are: SEA, LAR, DEN, NE
+const ELIMINATED_TEAMS_AFTER_DIVISIONAL = new Set(['BUF', 'CHI', 'SF', 'HOU']);
 
 // Roster slots in order
 const ROSTER_SLOTS = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'dst', 'k'] as const;
@@ -371,7 +372,6 @@ function PositionBarChart({ position, playerCounts, maxCount }: PositionBarChart
 }
 
 export function Analysis() {
-  const [selectedWeek, setSelectedWeek] = useState<number | 'all'>(1);
   const [selectedPosition, setSelectedPosition] = useState<Position>('QB');
   const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(2); // Default to most recent
   const [rosters, setRosters] = useState<Map<number, WeeklyRoster[]>>(new Map());
@@ -431,20 +431,16 @@ export function Analysis() {
     return new Map(players.map(p => [p.id, p]));
   }, [players]);
 
-  // Calculate player selection counts
+  // Calculate player selection counts (always across all weeks)
   const playerCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
-    // Get rosters for selected week(s)
+    // Get rosters for all weeks
     const rostersToAnalyze: WeeklyRoster[] = [];
-    if (selectedWeek === 'all') {
-      WEEKS.forEach(w => {
-        const weekRosters = rosters.get(w.week) || [];
-        rostersToAnalyze.push(...weekRosters);
-      });
-    } else {
-      rostersToAnalyze.push(...(rosters.get(selectedWeek) || []));
-    }
+    WEEKS.forEach(w => {
+      const weekRosters = rosters.get(w.week) || [];
+      rostersToAnalyze.push(...weekRosters);
+    });
 
     // Count player selections
     for (const roster of rostersToAnalyze) {
@@ -463,7 +459,7 @@ export function Analysis() {
     }
 
     return counts;
-  }, [rosters, selectedWeek]);
+  }, [rosters]);
 
   // Group by position and sort by count
   const countsByPosition = useMemo(() => {
@@ -667,17 +663,14 @@ export function Analysis() {
     });
   }, [rosters, selectedStatsWeek, userMap, playerMap, currentPlayerStats, currentEliminatedTeams, playerCounts, topScorersByPosition]);
 
-  // Get total rosters for context
+  // Get total rosters for context (always across all weeks)
   const totalRosters = useMemo(() => {
-    if (selectedWeek === 'all') {
-      let total = 0;
-      WEEKS.forEach(w => {
-        total += (rosters.get(w.week) || []).length;
-      });
-      return total;
-    }
-    return (rosters.get(selectedWeek) || []).length;
-  }, [rosters, selectedWeek]);
+    let total = 0;
+    WEEKS.forEach(w => {
+      total += (rosters.get(w.week) || []).length;
+    });
+    return total;
+  }, [rosters]);
 
   if (loading) {
     return (
@@ -697,33 +690,6 @@ export function Analysis() {
             Player selection frequency across {totalRosters} roster{totalRosters !== 1 ? 's' : ''}
           </p>
         </div>
-      </div>
-
-      {/* Week Selector */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setSelectedWeek('all')}
-          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-            selectedWeek === 'all'
-              ? 'bg-primary-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          All Weeks
-        </button>
-        {WEEKS.map(w => (
-          <button
-            key={w.week}
-            onClick={() => setSelectedWeek(w.week)}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-              selectedWeek === w.week
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {PLAYOFF_WEEK_DISPLAY_NAMES[w.name]}
-          </button>
-        ))}
       </div>
 
       {/* Previous Week Stats Section */}
