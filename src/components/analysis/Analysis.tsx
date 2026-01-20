@@ -19,7 +19,7 @@ const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
 
 // Teams eliminated after Wild Card round (lost their game)
 // Divisional teams are: BUF, DEN, NE, HOU, CHI, LAR, SEA, SF
-const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['PIT', 'LAC', 'TB', 'GB', 'MIN', 'WAS']);
+const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['PIT', 'LAC', 'TB', 'GB', 'MIN', 'WAS', 'CAR', 'JAX', 'PHI']);
 
 // Teams eliminated after Divisional round (not in championship)
 // Championship teams are: SEA, LAR, DEN, NE
