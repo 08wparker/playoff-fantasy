@@ -19,7 +19,7 @@ export const WEEK_CSV_FILES: Record<number, string> = {
 export const WEEK_LOCK_TIMES: Record<number, Date> = {
   1: new Date('2026-01-10T21:30:00Z'), // Jan 10, 3:30 PM CST (Wild Card)
   2: new Date('2026-01-17T21:30:00Z'), // Jan 17, 2:30 PM MT (Divisional)
-  3: new Date('2026-01-25T19:00:00Z'), // Jan 25, 2:00 PM ET (Conference Championships)
+  3: new Date('2026-01-25T20:00:00Z'), // Jan 25, 2:00 PM CST (Conference Championships)
   4: new Date('2026-02-09T00:30:00Z'), // Feb 8, 6:30 PM CST (Super Bowl)
 };
 
