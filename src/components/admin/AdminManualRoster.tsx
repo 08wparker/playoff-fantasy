@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getAllUsers, getCachedPlayers, saveRoster, addUsedPlayers } from '../../services/firebase';
+import { useCurrentWeek } from '../../hooks/useCurrentWeek';
 import type { User, Player, WeeklyRoster } from '../../types';
 
-const CURRENT_WEEK = 3; // Championship week
-
 export function AdminManualRoster() {
+  const { week: currentWeek, weekName } = useCurrentWeek();
   const [users, setUsers] = useState<User[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
@@ -63,7 +63,7 @@ export function AdminManualRoster() {
     try {
       const weeklyRoster: WeeklyRoster = {
         odId: selectedUser,
-        week: CURRENT_WEEK,
+        week: currentWeek,
         qb: roster.qb,
         rb1: roster.rb1,
         rb2: roster.rb2,
@@ -127,7 +127,7 @@ export function AdminManualRoster() {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4">Manual Roster Entry (Week {CURRENT_WEEK})</h2>
+      <h2 className="text-xl font-bold mb-4">Manual Roster Entry ({weekName})</h2>
       <p className="text-sm text-gray-600 mb-4">
         Add rosters for users who missed the deadline. Rosters will be auto-locked.
       </p>

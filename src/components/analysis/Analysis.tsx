@@ -7,14 +7,14 @@ const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
 const WEEKS: { week: number; name: PlayoffWeekName }[] = [
   { week: 1, name: 'wildcard' },
   { week: 2, name: 'divisional' },
-  // { week: 3, name: 'championship' },
-  // { week: 4, name: 'superbowl' },
+  { week: 3, name: 'championship' },
 ];
 
 // Stats weeks that have completed
 const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
   { week: 1, name: 'wildcard', label: 'Wild Card' },
   { week: 2, name: 'divisional', label: 'Divisional' },
+  { week: 3, name: 'championship', label: 'Championship' },
 ];
 
 // Teams eliminated after Wild Card round (lost their game)
@@ -24,6 +24,10 @@ const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['PIT', 'LAC', 'TB', 'GB', 'MIN'
 // Teams eliminated after Divisional round (not in championship)
 // Championship teams are: SEA, LAR, DEN, NE
 const ELIMINATED_TEAMS_AFTER_DIVISIONAL = new Set(['BUF', 'CHI', 'SF', 'HOU']);
+
+// Teams eliminated after Championship round (not in Super Bowl)
+// Super Bowl teams are: SEA, NE
+const ELIMINATED_TEAMS_AFTER_CHAMPIONSHIP = new Set(['DEN', 'LAR']);
 
 // Roster slots in order
 const ROSTER_SLOTS = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'dst', 'k'] as const;
@@ -505,12 +509,16 @@ export function Analysis() {
 
   // Get eliminated teams based on selected stats week
   const currentEliminatedTeams = useMemo(() => {
-    return selectedStatsWeek === 1 ? ELIMINATED_TEAMS_AFTER_WILDCARD : ELIMINATED_TEAMS_AFTER_DIVISIONAL;
+    if (selectedStatsWeek === 1) return ELIMINATED_TEAMS_AFTER_WILDCARD;
+    if (selectedStatsWeek === 2) return ELIMINATED_TEAMS_AFTER_DIVISIONAL;
+    return ELIMINATED_TEAMS_AFTER_CHAMPIONSHIP;
   }, [selectedStatsWeek]);
 
   // Get next round name
   const nextRoundLabel = useMemo(() => {
-    return selectedStatsWeek === 1 ? 'Divisional' : 'Championship';
+    if (selectedStatsWeek === 1) return 'Divisional';
+    if (selectedStatsWeek === 2) return 'Championship';
+    return 'Super Bowl';
   }, [selectedStatsWeek]);
 
   // Calculate top scorers by position

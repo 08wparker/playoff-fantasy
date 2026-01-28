@@ -1,0 +1,34 @@
+player,position,team,rank
+Drake Maye,QB,NE,1
+Sam Darnold,QB,SEA,2
+Kenneth Walker III,RB,SEA,1
+Rhamondre Stevenson,RB,NE,2
+TreVeyon Henderson,RB,NE,3
+George Holani,RB,SEA,4
+Zach Charbonnet,RB,SEA,5
+Cam Akers,RB,SEA,6
+D'Ernest Johnson,RB,NE,7
+Terrell Jennings,RB,NE,8
+Jaxon Smith-Njigba,WR,SEA,1
+Stefon Diggs,WR,NE,2
+Kayshon Boutte,WR,NE,3
+Rashid Shaheed,WR,SEA,4
+Cooper Kupp,WR,SEA,5
+Mack Hollins,WR,NE,6
+Kyle Williams,WR,NE,7
+DeMario Douglas,WR,NE,8
+Jake Bobo,WR,SEA,9
+Efton Chism III,WR,NE,10
+Dareke Young,WR,SEA,11
+Velus Jones Jr.,WR,SEA,12
+Hunter Henry,TE,NE,1
+AJ Barner,TE,SEA,2
+Nick Kallerup,TE,SEA,3
+Austin Hooper,TE,NE,4
+Brady Russell,TE,SEA,5
+Eric Saubert,TE,SEA,6
+Jack Westover,TE,NE,7
+Jason Myers,K,SEA,1
+Andy Borregales,K,NE,2
+SEA Defense,DST,SEA,1
+NE Defense,DST,NE,2

@@ -18,6 +18,7 @@ interface DisplayStats {
 const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
   { week: 1, name: 'wildcard', label: 'Wild Card' },
   { week: 2, name: 'divisional', label: 'Divisional' },
+  { week: 3, name: 'championship', label: 'Championship' },
 ];
 
 // Game scores by round (hardcoded since games are final)
@@ -36,7 +37,10 @@ const GAMES_BY_WEEK: Record<PlayoffWeekName, { shortName: string; awayScore: num
     { shortName: 'SF @ SEA', awayScore: 6, homeScore: 41 },
     { shortName: 'CHI @ LAR', awayScore: 17, homeScore: 20 },  // OT
   ],
-  championship: [],
+  championship: [
+    { shortName: 'NE @ DEN', awayScore: 10, homeScore: 7 },
+    { shortName: 'LAR @ SEA', awayScore: 27, homeScore: 31 },
+  ],
   superbowl: [],
 };
 
