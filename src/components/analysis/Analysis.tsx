@@ -65,16 +65,23 @@ function TopScorersChart({ position, playerScores, maxPoints, eliminatedTeams, a
   const chartHeight = 350;
   const chartPadding = 80; // Bottom padding for labels
 
+  // Support negative values
+  const visibleScores = playerScores.slice(0, 10);
+  const minPts = Math.min(...visibleScores.map(ps => ps.points), 0);
+  const maxPts = Math.max(maxPoints, 0);
+  const range = maxPts - minPts || 1;
+  const hasNegative = minPts < 0;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="relative" style={{ height: chartHeight + chartPadding }}>
         {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 w-12 flex flex-col justify-between text-sm text-gray-500 font-medium" style={{ height: chartHeight }}>
-          <span>{maxPoints.toFixed(0)} pts</span>
-          <span>{(maxPoints * 0.75).toFixed(0)}</span>
-          <span>{(maxPoints * 0.5).toFixed(0)}</span>
-          <span>{(maxPoints * 0.25).toFixed(0)}</span>
-          <span>0</span>
+        <div className="absolute left-0 top-0 w-14 flex flex-col justify-between text-sm text-gray-500 font-medium" style={{ height: chartHeight }}>
+          <span>{maxPts.toFixed(0)} pts</span>
+          <span>{(minPts + range * 0.75).toFixed(0)}</span>
+          <span>{(minPts + range * 0.5).toFixed(0)}</span>
+          <span>{(minPts + range * 0.25).toFixed(0)}</span>
+          <span>{minPts.toFixed(0)}</span>
         </div>
 
         {/* Chart area */}
@@ -85,13 +92,23 @@ function TopScorersChart({ position, playerScores, maxPoints, eliminatedTeams, a
             <div className="border-b border-gray-100 w-full" />
             <div className="border-b border-gray-100 w-full" />
             <div className="border-b border-gray-100 w-full" />
-            <div className="border-b border-gray-300 w-full" />
+            <div className={`border-b ${hasNegative ? 'border-gray-100' : 'border-gray-300'} w-full`} />
           </div>
+
+          {/* Zero line when there are negative values */}
+          {hasNegative && (
+            <div
+              className="absolute inset-x-0 border-b-2 border-gray-400 pointer-events-none z-10"
+              style={{ top: `${(maxPts / range) * chartHeight}px` }}
+            >
+              <span className="absolute -left-10 -top-2.5 text-xs text-gray-500 font-medium">0</span>
+            </div>
+          )}
 
           {/* Data points */}
           <div className="relative flex justify-around" style={{ height: chartHeight }}>
-            {playerScores.slice(0, 10).map(({ player, points }) => {
-              const heightPercent = (points / maxPoints) * 100;
+            {visibleScores.map(({ player, points }) => {
+              const heightPercent = ((points - minPts) / range) * 100;
               const isEliminated = eliminatedTeams.has(player.team);
               return (
                 <div
@@ -543,9 +560,7 @@ export function Analysis() {
       const stats = currentPlayerStats.get(player.id);
       if (stats) {
         const points = calculatePoints(stats, undefined, player.position);
-        if (points > 0) {
-          result[player.position].push({ player, points });
-        }
+        result[player.position].push({ player, points });
       }
     });
 
