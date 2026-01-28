@@ -377,7 +377,7 @@ function PositionBarChart({ position, playerCounts, maxCount }: PositionBarChart
 
 export function Analysis() {
   const [selectedPosition, setSelectedPosition] = useState<Position>('QB');
-  const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(2); // Default to most recent
+  const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(3); // Default to most recent
   const [rosters, setRosters] = useState<Map<number, WeeklyRoster[]>>(new Map());
   const [players, setPlayers] = useState<Player[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -389,11 +389,12 @@ export function Analysis() {
     async function loadData() {
       setLoading(true);
       try {
-        const [fetchedPlayers, fetchedUsers, wildcardStats, divisionalStats, ...weekRosters] = await Promise.all([
+        const [fetchedPlayers, fetchedUsers, wildcardStats, divisionalStats, championshipStats, ...weekRosters] = await Promise.all([
           getCachedPlayers(),
           getAllUsers(),
           getAllPlayerStatsForWeek('wildcard'),
           getAllPlayerStatsForWeek('divisional'),
+          getAllPlayerStatsForWeek('championship'),
           ...WEEKS.map(w => getAllRostersForWeek(w.week)),
         ]);
 
@@ -414,6 +415,12 @@ export function Analysis() {
           divisionalMap.set(stat.playerId, stat);
         });
         statsByWeek.set(2, divisionalMap);
+
+        const championshipMap = new Map<string, PlayerStats>();
+        championshipStats.forEach(stat => {
+          championshipMap.set(stat.playerId, stat);
+        });
+        statsByWeek.set(3, championshipMap);
 
         setPlayerStatsByWeek(statsByWeek);
 
