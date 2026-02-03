@@ -1,33 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getAllRostersForWeek, getCachedPlayers, getAllPlayerStatsForWeek, getAllUsers } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
-import type { Player, WeeklyRoster, Position, PlayoffWeekName, PlayerStats, User } from '../../types';
+import type { Player, WeeklyRoster, Position, PlayerStats, User } from '../../types';
+import { PLAYOFF_WEEKS } from '../../config/weeks';
+import { getEliminatedTeamsForWeek } from '../../config/season';
 
 const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
-const WEEKS: { week: number; name: PlayoffWeekName }[] = [
-  { week: 1, name: 'wildcard' },
-  { week: 2, name: 'divisional' },
-  { week: 3, name: 'championship' },
-];
 
-// Stats weeks that have completed
-const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
-  { week: 1, name: 'wildcard', label: 'Wild Card' },
-  { week: 2, name: 'divisional', label: 'Divisional' },
-  { week: 3, name: 'championship', label: 'Championship' },
-];
+// Build weeks from centralized config (exclude superbowl for now)
+const WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+  week: w.number,
+  name: w.name,
+}));
 
-// Teams eliminated after Wild Card round (lost their game)
-// Divisional teams are: BUF, DEN, NE, HOU, CHI, LAR, SEA, SF
-const ELIMINATED_TEAMS_AFTER_WILDCARD = new Set(['PIT', 'LAC', 'TB', 'GB', 'MIN', 'WAS', 'CAR', 'JAX', 'PHI']);
+// Stats weeks from centralized config
+const STATS_WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+  week: w.number,
+  name: w.name,
+  label: w.label,
+}));
 
-// Teams eliminated after Divisional round (not in championship)
-// Championship teams are: SEA, LAR, DEN, NE
-const ELIMINATED_TEAMS_AFTER_DIVISIONAL = new Set(['BUF', 'CHI', 'SF', 'HOU']);
-
-// Teams eliminated after Championship round (not in Super Bowl)
-// Super Bowl teams are: SEA, NE
-const ELIMINATED_TEAMS_AFTER_CHAMPIONSHIP = new Set(['DEN', 'LAR']);
+// Eliminated teams are now managed in config/season.ts
+// Use getEliminatedTeamsForWeek(weekNumber) to get the appropriate set
 
 // Roster slots in order
 const ROSTER_SLOTS = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'dst', 'k'] as const;
@@ -531,11 +525,9 @@ export function Analysis() {
     return playerStatsByWeek.get(selectedStatsWeek) || new Map<string, PlayerStats>();
   }, [playerStatsByWeek, selectedStatsWeek]);
 
-  // Get eliminated teams based on selected stats week
+  // Get eliminated teams based on selected stats week (now from config/season.ts)
   const currentEliminatedTeams = useMemo(() => {
-    if (selectedStatsWeek === 1) return ELIMINATED_TEAMS_AFTER_WILDCARD;
-    if (selectedStatsWeek === 2) return ELIMINATED_TEAMS_AFTER_DIVISIONAL;
-    return ELIMINATED_TEAMS_AFTER_CHAMPIONSHIP;
+    return getEliminatedTeamsForWeek(selectedStatsWeek);
   }, [selectedStatsWeek]);
 
   // Get next round name

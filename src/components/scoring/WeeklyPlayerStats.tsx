@@ -3,6 +3,8 @@ import type { PlayoffWeekName, Player, PlayerStats } from '../../types';
 import { PLAYOFF_WEEK_DISPLAY_NAMES } from '../../types';
 import { getCachedPlayers, getAllPlayerStatsForWeek, getPlayoffConfig } from '../../services/firebase';
 import { calculatePoints } from '../../services/scoring';
+import { PLAYOFF_WEEKS } from '../../config/weeks';
+import { GAME_RESULTS } from '../../config/season';
 
 interface WeeklyPlayerStatsProps {
   currentWeek: number;
@@ -14,35 +16,14 @@ interface DisplayStats {
   fantasyPoints: number;
 }
 
-// Available weeks for stats (completed rounds)
-const STATS_WEEKS: { week: number; name: PlayoffWeekName; label: string }[] = [
-  { week: 1, name: 'wildcard', label: 'Wild Card' },
-  { week: 2, name: 'divisional', label: 'Divisional' },
-  { week: 3, name: 'championship', label: 'Championship' },
-];
+// Build stats weeks from centralized config (excludes current week)
+const STATS_WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+  week: w.number,
+  name: w.name,
+  label: w.label,
+}));
 
-// Game scores by round (hardcoded since games are final)
-const GAMES_BY_WEEK: Record<PlayoffWeekName, { shortName: string; awayScore: number; homeScore: number }[]> = {
-  wildcard: [
-    { shortName: 'LAR @ CAR', awayScore: 34, homeScore: 31 },
-    { shortName: 'GB @ CHI', awayScore: 27, homeScore: 31 },
-    { shortName: 'BUF @ JAX', awayScore: 27, homeScore: 24 },
-    { shortName: 'SF @ PHI', awayScore: 23, homeScore: 19 },
-    { shortName: 'LAC @ NE', awayScore: 3, homeScore: 16 },
-    { shortName: 'HOU @ PIT', awayScore: 30, homeScore: 6 },
-  ],
-  divisional: [
-    { shortName: 'BUF @ DEN', awayScore: 30, homeScore: 33 },  // OT
-    { shortName: 'HOU @ NE', awayScore: 16, homeScore: 28 },
-    { shortName: 'SF @ SEA', awayScore: 6, homeScore: 41 },
-    { shortName: 'CHI @ LAR', awayScore: 17, homeScore: 20 },  // OT
-  ],
-  championship: [
-    { shortName: 'NE @ DEN', awayScore: 10, homeScore: 7 },
-    { shortName: 'LAR @ SEA', awayScore: 27, homeScore: 31 },
-  ],
-  superbowl: [],
-};
+// Game results are now imported from config/season.ts as GAME_RESULTS
 
 export function WeeklyPlayerStats({ currentWeek }: WeeklyPlayerStatsProps) {
   // Filter to only show completed weeks (weeks before current)
@@ -109,7 +90,7 @@ export function WeeklyPlayerStats({ currentWeek }: WeeklyPlayerStatsProps) {
     );
   }
 
-  const currentGames = GAMES_BY_WEEK[selectedWeek] || [];
+  const currentGames = GAME_RESULTS[selectedWeek] || [];
 
   return (
     <div className="space-y-6">

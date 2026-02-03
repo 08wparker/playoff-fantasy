@@ -22,11 +22,10 @@ import { AdminWeeklySummary } from './components/admin/AdminWeeklySummary';
 import { AdminInjuryReport } from './components/admin/AdminInjuryReport';
 import { AdminMissingLineups } from './components/admin/AdminMissingLineups';
 import { AdminManualRoster } from './components/admin/AdminManualRoster';
+import { AdminSeasonConfig } from './components/admin/AdminSeasonConfig';
 import { Analysis } from './components/analysis/Analysis';
 import type { TabType } from './components/layout/TabNav';
-
-// Admin email addresses
-const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
+import { ADMIN_EMAILS } from './config/season';
 
 // Auth Provider wrapper
 function AuthProvider({ children }: { children: ReactNode }) {
@@ -103,6 +102,7 @@ function AppContent() {
         <Analysis />
       ) : (
         <div className="space-y-6">
+          <AdminSeasonConfig />
           <AdminManualRoster />
           <AdminWeek />
           <AdminRosterLock />

@@ -43,7 +43,7 @@ This is a React 19 + TypeScript + Vite application for NFL playoff fantasy footb
 - **Super Bowl teams**: SEA vs NE
 
 ### Eliminated Teams by Round (for Analysis tab)
-Tracked in `src/components/analysis/Analysis.tsx`:
+Tracked in `src/config/season.ts` (`ELIMINATED_TEAMS`):
 - After Wild Card: PIT, LAC, TB, GB, MIN, WAS, CAR, JAX, PHI
 - After Divisional: BUF, CHI, SF, HOU
 - After Championship: DEN, LAR
@@ -84,10 +84,10 @@ Scoring rules stored in Firebase (`config/scoringRules`) and can be modified via
 - `rankings/week21/` - Divisional rankings by position
 - `rankings/week22/` - Championship/Super Bowl rankings by position
 
-**Week lock times** defined in `src/data/players.ts` (`WEEK_LOCK_TIMES`):
-- Wild Card: Jan 11, 2025 4:30 PM ET
-- Divisional: Jan 18, 2025 4:30 PM ET
-- Championship: Jan 25, 2025 2:00 PM CST (8:00 PM UTC)
+**Week lock times** defined in `src/config/season.ts` (`WEEK_LOCK_TIMES`):
+- Wild Card: Jan 10, 2026 3:30 PM CST
+- Divisional: Jan 17, 2026 3:30 PM CST
+- Championship: Jan 25, 2026 2:00 PM CST
 - Super Bowl: Feb 8, 2026 6:30 PM CST
 
 ### Key Files
@@ -97,7 +97,26 @@ Scoring rules stored in Firebase (`config/scoringRules`) and can be modified via
 - `src/services/espn.ts` - ESPN API integration for live stats, box scores, game fetching
 - `src/hooks/useScoring.ts` - Multi-week standings calculation
 - `src/hooks/useCurrentWeek.ts` - Current week detection (date-based or admin override)
-- `src/data/players.ts` - Week CSV paths, lock times, week date ranges
+- `src/data/players.ts` - Re-exports from config (backward compatibility)
+
+### Configuration Module (`src/config/`)
+
+**IMPORTANT: Centralized configuration for future-proofing**
+
+- `src/config/weeks.ts` - Week definitions (single source of truth for week numbers/names/labels)
+- `src/config/season.ts` - Season-specific data (UPDATE THIS FOR NEW SEASONS):
+  - `SEASON_YEAR` - Current season identifier
+  - `ADMIN_EMAILS` - Admin email addresses
+  - `WEEK_LOCK_TIMES` - Roster lock times for each week
+  - `ESPN_PLAYOFF_DATE_RANGES` - ESPN API date ranges for fetching games
+  - `INITIAL_PLAYOFF_TEAMS` - Teams in the playoffs at start
+  - `ELIMINATED_TEAMS` - Teams eliminated after each round
+  - `GAME_RESULTS` - Final scores for each game
+  - `WEEK_CSV_FILES` - Paths to player CSV files
+  - `SUPER_BOWL_TEAMS` - Super Bowl matchup
+- `src/config/index.ts` - Re-exports all config
+
+See `FUTURE_PROOF.md` for detailed guidance on updating for new seasons.
 
 ### Component Structure
 
@@ -126,6 +145,7 @@ Scoring rules stored in Firebase (`config/scoringRules`) and can be modified via
   - Configurable week selector (Wild Card, Divisional, Championship)
 
 **Admin Components** (`src/components/admin/`):
+- `AdminSeasonConfig.tsx` - View current season config (lock times, teams, game results)
 - `AdminSync.tsx` - Sync players from CSV per week with ESPN headshots
 - `AdminStats.tsx` - Spreadsheet UI for entering/editing player stats, ESPN re-sync, clear stats
 - `AdminScoringRules.tsx` - Edit scoring rules
@@ -141,22 +161,22 @@ Scoring rules stored in Firebase (`config/scoringRules`) and can be modified via
 - `src/services/espn.ts` handles all ESPN API calls
 - `fetchNFLScoreboard(playoffWeek?)` - Get games for a playoff week using date ranges
 - `fetchGameBoxScore(gameId)` - Get detailed box score with player stats
-- Playoff week dates configured in `PLAYOFF_WEEK_DATES` constant
+- Playoff week dates configured in `src/config/season.ts` (`ESPN_PLAYOFF_DATE_RANGES`)
 - Auto-syncs matched players to Firebase every 60 seconds when enabled
 - Parses: passing, rushing, receiving, kicking (with FG distance breakdown), defense stats
+- **Resilience features**: Retry with exponential backoff, multiple FG parsing patterns, unknown team logging
 
 ### Game Scores (for WeeklyPlayerStats display)
-Hardcoded in `src/components/scoring/WeeklyPlayerStats.tsx` (`GAMES_BY_WEEK`):
+Defined in `src/config/season.ts` (`GAME_RESULTS`):
 
 **Wild Card**:
-- PIT @ BUF: 17-31, LAC @ HOU: 12-32
-- DEN @ BUF: 7-31, GB @ PHI: 22-10
-- WAS @ TB: 23-20, MIN @ LAR: 27-9
-- (Additional games as applicable)
+- LAR @ CAR: 34-31, GB @ CHI: 27-31
+- BUF @ JAX: 27-24, SF @ PHI: 23-19
+- LAC @ NE: 3-16, HOU @ PIT: 30-6
 
 **Divisional**:
-- CHI @ LAR: 20-44, DEN @ BUF: 14-38
-- SF @ SEA: 23-31, NE @ HOU: 24-5
+- BUF @ DEN: 30-33 (OT), HOU @ NE: 16-28
+- SF @ SEA: 6-41, CHI @ LAR: 17-20 (OT)
 
 **Championship**:
 - NE @ DEN: 10-7, LAR @ SEA: 27-31
@@ -190,9 +210,9 @@ Firebase config is loaded from environment variables (VITE_FIREBASE_*). Create a
 
 ## Admin Access
 
-Admin emails are defined in `App.tsx`:
+Admin emails are defined in `src/config/season.ts`:
 ```typescript
-const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
+export const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
 ```
 
 ## Current Season Status (2024-25 Playoffs)

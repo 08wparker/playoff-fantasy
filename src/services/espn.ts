@@ -1,11 +1,31 @@
-// ESPN API Service for fetching live NFL stats
-// Note: This is an unofficial API - no auth required but could change without notice
+/**
+ * ESPN API Service for fetching live NFL stats.
+ * Note: This is an unofficial API - no auth required but could change without notice.
+ *
+ * FRAGILITY WARNING: ESPN can change their API format at any time.
+ * Key areas to monitor:
+ * - Team abbreviation mappings (ESPN_TEAM_MAP)
+ * - FG distance text parsing (parseFGDistance)
+ * - Box score response structure
+ *
+ * RESILIENCE FEATURES:
+ * - Retry with exponential backoff
+ * - Multiple FG distance parsing patterns
+ * - Unknown team/position logging
+ * - Graceful fallbacks for parsing failures
+ */
 
 import type { PlayerStats, NFLTeam } from '../types';
+import { ESPN_PLAYOFF_DATE_RANGES } from '../config/season';
 
 const ESPN_BASE_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
 // ESPN team abbreviation mapping to our format
+// UPDATE: Add new mappings here if ESPN introduces new abbreviations
 const ESPN_TEAM_MAP: Record<string, NFLTeam> = {
   'ARI': 'ARI', 'ATL': 'ATL', 'BAL': 'BAL', 'BUF': 'BUF',
   'CAR': 'CAR', 'CHI': 'CHI', 'CIN': 'CIN', 'CLE': 'CLE',
@@ -19,6 +39,88 @@ const ESPN_TEAM_MAP: Record<string, NFLTeam> = {
   'WSH': 'WAS',
   'JAC': 'JAX',
 };
+
+// Track unknown team abbreviations (for debugging)
+const unknownTeams = new Set<string>();
+
+/**
+ * Normalize ESPN team abbreviation to our format.
+ * Logs unknown abbreviations for debugging.
+ */
+function normalizeTeamAbbr(espnAbbr: string | undefined): NFLTeam | null {
+  if (!espnAbbr) return null;
+  const upper = espnAbbr.toUpperCase();
+  const normalized = ESPN_TEAM_MAP[upper];
+  if (!normalized && !unknownTeams.has(upper)) {
+    unknownTeams.add(upper);
+    console.warn(`[ESPN] Unknown team abbreviation: "${espnAbbr}" - add to ESPN_TEAM_MAP if valid`);
+  }
+  return normalized ?? null;
+}
+
+/**
+ * Parse FG distance from various ESPN text formats.
+ * Tries multiple patterns to handle format changes.
+ */
+function parseFGDistance(playText: string): number | null {
+  if (!playText) return null;
+
+  // Pattern 1: "Name 50 Yd Field Goal" (standard)
+  let match = playText.match(/(\d+)\s+Yd\s+Field\s+Goal/i);
+  if (match) return parseInt(match[1], 10);
+
+  // Pattern 2: "Name 50-yard field goal" (alternative)
+  match = playText.match(/(\d+)-yard\s+field\s+goal/i);
+  if (match) return parseInt(match[1], 10);
+
+  // Pattern 3: "FG 50" or "50 FG"
+  match = playText.match(/(?:FG\s+(\d+)|(\d+)\s+FG)/i);
+  if (match) return parseInt(match[1] || match[2], 10);
+
+  // Pattern 4: Just extract any number between 20-60 (typical FG range)
+  match = playText.match(/\b([2-5][0-9])\b/);
+  if (match) {
+    const dist = parseInt(match[1], 10);
+    if (dist >= 20 && dist <= 60) return dist;
+  }
+
+  // Log unparseable FG for debugging
+  console.warn(`[ESPN] Could not parse FG distance from: "${playText}"`);
+  return null;
+}
+
+/**
+ * Fetch with retry and exponential backoff.
+ */
+async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response;
+
+      // Don't retry 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(`ESPN API error: ${response.status} ${response.statusText}`);
+      }
+
+      // Retry 5xx errors (server errors)
+      lastError = new Error(`ESPN API error: ${response.status}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+
+    // Wait before retrying (exponential backoff)
+    if (attempt < retries - 1) {
+      const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+      console.warn(`[ESPN] Retry ${attempt + 1}/${retries} in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError || new Error('ESPN API request failed');
+}
 
 // Types for ESPN API responses
 export interface ESPNGame {
@@ -105,78 +207,79 @@ export interface ESPNBoxScore {
   }[];
 }
 
-// Playoff week date ranges (2025-26 season)
-// Format: YYYYMMDD-YYYYMMDD
-const PLAYOFF_WEEK_DATES: Record<number, string> = {
-  1: '20260110-20260114', // Wild Card: Jan 10-13, 2026
-  2: '20260117-20260119', // Divisional: Jan 17-18, 2026
-  3: '20260124-20260126', // Championship: Jan 25-26, 2026
-  4: '20260208-20260209', // Super Bowl: Feb 8, 2026
-};
+// Playoff week date ranges are now imported from config/season.ts
+// Use ESPN_PLAYOFF_DATE_RANGES for date filtering
 
-// Fetch current NFL scoreboard (all games for today/this week)
+/**
+ * Fetch current NFL scoreboard (all games for today/this week).
+ * Uses retry logic for resilience.
+ */
 export async function fetchNFLScoreboard(playoffWeek?: number): Promise<ESPNGame[]> {
   try {
     let url = `${ESPN_BASE_URL}/scoreboard`;
 
     // If playoff week specified, add date range parameter
-    if (playoffWeek && PLAYOFF_WEEK_DATES[playoffWeek]) {
-      url += `?dates=${PLAYOFF_WEEK_DATES[playoffWeek]}`;
+    if (playoffWeek && ESPN_PLAYOFF_DATE_RANGES[playoffWeek]) {
+      url += `?dates=${ESPN_PLAYOFF_DATE_RANGES[playoffWeek]}`;
     }
 
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`ESPN API error: ${response.status}`);
-
+    const response = await fetchWithRetry(url);
     const data = await response.json();
     return data.events || [];
   } catch (error) {
-    console.error('Error fetching NFL scoreboard:', error);
+    console.error('[ESPN] Error fetching NFL scoreboard:', error);
     throw error;
   }
 }
 
-// Fetch detailed box score for a specific game
+/**
+ * Fetch detailed box score for a specific game.
+ * Uses retry logic and returns null on failure (graceful degradation).
+ */
 export async function fetchGameBoxScore(gameId: string): Promise<ESPNBoxScore | null> {
   try {
-    const response = await fetch(`${ESPN_BASE_URL}/summary?event=${gameId}`);
-    if (!response.ok) throw new Error(`ESPN API error: ${response.status}`);
-
+    const response = await fetchWithRetry(`${ESPN_BASE_URL}/summary?event=${gameId}`);
     const data = await response.json();
     return parseBoxScore(gameId, data);
   } catch (error) {
-    console.error(`Error fetching box score for game ${gameId}:`, error);
+    console.error(`[ESPN] Error fetching box score for game ${gameId}:`, error);
     return null;
   }
 }
 
-// Parse ESPN box score response into our format
+/**
+ * Parse ESPN box score response into our format.
+ * Uses graceful degradation for missing/malformed data.
+ */
 function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
   const competition = data.header?.competitions?.[0];
   const boxscore = data.boxscore;
   const scoringPlays = data.scoringPlays || [];
 
-  // Get team info
+  // Get team info with normalization
   const competitors = competition?.competitors || [];
-  const homeTeam = competitors.find((c: any) => c.homeAway === 'home');
-  const awayTeam = competitors.find((c: any) => c.homeAway === 'away');
+  const homeTeamData = competitors.find((c: any) => c.homeAway === 'home');
+  const awayTeamData = competitors.find((c: any) => c.homeAway === 'away');
 
-  const homeAbbr = ESPN_TEAM_MAP[homeTeam?.team?.abbreviation] || homeTeam?.team?.abbreviation;
-  const awayAbbr = ESPN_TEAM_MAP[awayTeam?.team?.abbreviation] || awayTeam?.team?.abbreviation;
+  const homeAbbr = normalizeTeamAbbr(homeTeamData?.team?.abbreviation) || homeTeamData?.team?.abbreviation;
+  const awayAbbr = normalizeTeamAbbr(awayTeamData?.team?.abbreviation) || awayTeamData?.team?.abbreviation;
 
   const status = competition?.status?.type;
 
-  // Parse FG distances from scoring plays
-  // Format: "Matt Prater 50 Yd Field Goal"
+  // Parse FG distances from scoring plays using robust parser
   const fgDistances: { kickerName: string; team: string; distance: number }[] = [];
   for (const play of scoringPlays) {
     if (play.scoringType?.name === 'field-goal' && play.text) {
-      const match = play.text.match(/^(.+?)\s+(\d+)\s+Yd\s+Field\s+Goal/i);
-      if (match) {
-        const teamAbbr = ESPN_TEAM_MAP[play.team?.abbreviation] || play.team?.abbreviation;
+      const distance = parseFGDistance(play.text);
+      if (distance !== null) {
+        // Extract kicker name (everything before the distance)
+        const nameMatch = play.text.match(/^(.+?)\s+\d+/);
+        const kickerName = nameMatch ? nameMatch[1].trim() : 'Unknown';
+        const teamAbbr = normalizeTeamAbbr(play.team?.abbreviation) || play.team?.abbreviation;
         fgDistances.push({
-          kickerName: match[1].trim(),
+          kickerName,
           team: teamAbbr,
-          distance: parseInt(match[2]),
+          distance,
         });
       }
     }
@@ -189,7 +292,7 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
 
   // Process each team's player stats
   for (const teamStats of boxscore?.players || []) {
-    const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
+    const teamAbbr = normalizeTeamAbbr(teamStats.team?.abbreviation) || teamStats.team?.abbreviation;
 
     // Each team has multiple stat categories (passing, rushing, receiving, etc.)
     for (const category of teamStats.statistics || []) {
@@ -319,7 +422,7 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
   const teamOffensiveStats: Record<string, { intsThrown: number; fumblesLost: number; timesSacked: number }> = {};
 
   for (const teamStats of boxscore?.teams || []) {
-    const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
+    const teamAbbr = normalizeTeamAbbr(teamStats.team?.abbreviation) || teamStats.team?.abbreviation;
     teamOffensiveStats[teamAbbr] = { intsThrown: 0, fumblesLost: 0, timesSacked: 0 };
 
     for (const stat of teamStats.statistics || []) {
@@ -343,11 +446,11 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
 
   // Second pass: build defense stats using opponent's offensive stats
   for (const teamStats of boxscore?.teams || []) {
-    const teamAbbr = ESPN_TEAM_MAP[teamStats.team?.abbreviation] || teamStats.team?.abbreviation;
+    const teamAbbr = normalizeTeamAbbr(teamStats.team?.abbreviation) || teamStats.team?.abbreviation;
     const opponentAbbr = teamAbbr === homeAbbr ? awayAbbr : homeAbbr;
     const opponentScore = teamAbbr === homeAbbr
-      ? parseInt(awayTeam?.score || '0')
-      : parseInt(homeTeam?.score || '0');
+      ? parseInt(awayTeamData?.score || '0')
+      : parseInt(homeTeamData?.score || '0');
 
     // Get opponent's offensive stats (which become this team's defensive stats)
     const opponentStats = teamOffensiveStats[opponentAbbr] || { intsThrown: 0, fumblesLost: 0, timesSacked: 0 };
@@ -382,8 +485,8 @@ function parseBoxScore(gameId: string, data: any): ESPNBoxScore {
     isInProgress: status?.state === 'in',
     homeTeam: homeAbbr as NFLTeam,
     awayTeam: awayAbbr as NFLTeam,
-    homeScore: parseInt(homeTeam?.score || '0'),
-    awayScore: parseInt(awayTeam?.score || '0'),
+    homeScore: parseInt(homeTeamData?.score || '0'),
+    awayScore: parseInt(awayTeamData?.score || '0'),
     players,
     kickerStats,
     defenseStats,
