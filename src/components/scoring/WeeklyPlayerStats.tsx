@@ -16,8 +16,8 @@ interface DisplayStats {
   fantasyPoints: number;
 }
 
-// Build stats weeks from centralized config (excludes current week)
-const STATS_WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+// Build stats weeks from centralized config
+const STATS_WEEKS = PLAYOFF_WEEKS.map(w => ({
   week: w.number,
   name: w.name,
   label: w.label,
@@ -26,8 +26,8 @@ const STATS_WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => (
 // Game results are now imported from config/season.ts as GAME_RESULTS
 
 export function WeeklyPlayerStats({ currentWeek }: WeeklyPlayerStatsProps) {
-  // Filter to only show completed weeks (weeks before current)
-  const availableWeeks = STATS_WEEKS.filter(w => w.week < currentWeek);
+  // Filter to only show completed weeks (weeks up to and including current)
+  const availableWeeks = STATS_WEEKS.filter(w => w.week <= currentWeek);
   const [selectedWeek, setSelectedWeek] = useState<PlayoffWeekName>(
     availableWeeks.length > 0 ? availableWeeks[availableWeeks.length - 1].name : 'wildcard'
   );

@@ -210,10 +210,11 @@ New component at `src/components/admin/AdminSeasonSetup.tsx`:
 
 ## Migration Plan
 
-### Phase 1: Centralize Configuration (Low Risk)
-- [ ] Create `src/config/weeks.ts` with centralized week definitions
-- [ ] Update all files to import from central location
-- [ ] No behavior change, just consolidation
+### Phase 1: Centralize Configuration (Low Risk) - DONE
+- [x] Create `src/config/weeks.ts` with centralized week definitions
+- [x] Update all files to import from central location
+- [x] Created `src/config/season.ts` with all season-specific data
+- [x] No behavior change, just consolidation
 
 ### Phase 2: Add Firebase Season Config (Medium Risk)
 - [ ] Add `config/season` collection to Firebase

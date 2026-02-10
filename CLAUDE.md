@@ -134,7 +134,7 @@ See `FUTURE_PROOF.md` for detailed guidance on updating for new seasons.
 
 **App Tabs** (defined in `src/components/layout/TabNav.tsx`):
 - `roster` - Build weekly roster (shows current week name)
-- `previous-stats` - View saved stats for completed weeks (Wild Card, Divisional, Championship)
+- `previous-stats` - View saved stats for completed weeks (all rounds up to current week)
 - `live` - Live ESPN stats during games
 - `scores` - Scoreboard with overall + per-week standings
 - `analysis` - Roster analysis, top scorers charts, winning rosters breakdown
@@ -154,7 +154,7 @@ See `FUTURE_PROOF.md` for detailed guidance on updating for new seasons.
   - Chart supports negative scores (important for kickers)
   - "What Did the Winners Pick?" - Top 5 rosters with consensus picks and galaxy brain picks
   - Player Selection Frequency - Bar charts showing most picked players
-  - Configurable week selector (Wild Card, Divisional, Championship)
+  - Configurable week selector (all rounds including Super Bowl)
 
 **Admin Components** (`src/components/admin/`):
 - `AdminSeasonConfig.tsx` - View current season config (lock times, teams, game results)
@@ -231,7 +231,40 @@ export const ADMIN_EMAILS = ['william.f.parker@gmail.com'];
 
 - Wild Card: Complete
 - Divisional: Complete
-- Championship: Complete (SEA and NE advanced)
-- Super Bowl: Upcoming (SEA vs NE)
+- Championship: Complete
+- Super Bowl: Complete (SEA vs NE)
+- Season is FINISHED - all stats finalized, payouts calculated
 - 23 teams in the pool
-- Leader after Championship: JJ Parker (429.8 pts)
+
+## New Season Checklist
+
+When starting a new season, update these in order:
+
+1. **`src/config/season.ts`** - This is the main file to update:
+   - `SEASON_YEAR` - New season identifier
+   - `ADMIN_EMAILS` - Add/remove admins if needed
+   - `WEEK_LOCK_TIMES` - New dates (UTC) for each round
+   - `ESPN_PLAYOFF_DATE_RANGES` - ESPN API date ranges for each round
+   - `INITIAL_PLAYOFF_TEAMS` - 14 playoff teams after regular season ends
+   - `ELIMINATED_TEAMS` - Reset all sets to empty, fill in as rounds complete
+   - `GAME_RESULTS` - Reset all arrays to empty, fill in after each game
+   - `WEEK_CSV_FILES` - Usually unchanged unless file naming changes
+   - `SUPER_BOWL_TEAMS` - Set after Conference Championships
+
+2. **`public/data/*.csv`** - Create new player CSV files for each week:
+   - Format: `player,position,team,rank`
+   - One file per round: wildcard.csv, divisional.csv, championship.csv, superbowl.csv
+
+3. **Firebase** - Reset collections for new season:
+   - Clear `playerStats/` (or archive old season)
+   - Clear `rosters/` and `usedPlayers/`
+   - Reset `config/currentWeek` to null (auto-detect)
+   - Reset `config/liveStats` enabled flag
+   - Keep `users/` but reset `hasPaid` flags
+   - Clear `weeklySummaries/`
+
+4. **Admin workflow during season**:
+   - Before each round: Upload CSV, sync players via Admin > Sync
+   - During games: Enable live stats via Admin > Live Stats
+   - After games: Disable live stats, verify stats in Admin > Stats, lock rosters
+   - After each round: Update `ELIMINATED_TEAMS` and `GAME_RESULTS` in season.ts, redeploy

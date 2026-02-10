@@ -7,14 +7,14 @@ import { getEliminatedTeamsForWeek } from '../../config/season';
 
 const POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
 
-// Build weeks from centralized config (exclude superbowl for now)
-const WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+// Build weeks from centralized config
+const WEEKS = PLAYOFF_WEEKS.map(w => ({
   week: w.number,
   name: w.name,
 }));
 
 // Stats weeks from centralized config
-const STATS_WEEKS = PLAYOFF_WEEKS.filter(w => w.name !== 'superbowl').map(w => ({
+const STATS_WEEKS = PLAYOFF_WEEKS.map(w => ({
   week: w.number,
   name: w.name,
   label: w.label,
@@ -388,7 +388,7 @@ function PositionBarChart({ position, playerCounts, maxCount }: PositionBarChart
 
 export function Analysis() {
   const [selectedPosition, setSelectedPosition] = useState<Position>('QB');
-  const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(3); // Default to most recent
+  const [selectedStatsWeek, setSelectedStatsWeek] = useState<number>(4); // Default to most recent
   const [rosters, setRosters] = useState<Map<number, WeeklyRoster[]>>(new Map());
   const [players, setPlayers] = useState<Player[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -400,12 +400,13 @@ export function Analysis() {
     async function loadData() {
       setLoading(true);
       try {
-        const [fetchedPlayers, fetchedUsers, wildcardStats, divisionalStats, championshipStats, ...weekRosters] = await Promise.all([
+        const [fetchedPlayers, fetchedUsers, wildcardStats, divisionalStats, championshipStats, superbowlStats, ...weekRosters] = await Promise.all([
           getCachedPlayers(),
           getAllUsers(),
           getAllPlayerStatsForWeek('wildcard'),
           getAllPlayerStatsForWeek('divisional'),
           getAllPlayerStatsForWeek('championship'),
+          getAllPlayerStatsForWeek('superbowl'),
           ...WEEKS.map(w => getAllRostersForWeek(w.week)),
         ]);
 
@@ -432,6 +433,12 @@ export function Analysis() {
           championshipMap.set(stat.playerId, stat);
         });
         statsByWeek.set(3, championshipMap);
+
+        const superbowlMap = new Map<string, PlayerStats>();
+        superbowlStats.forEach(stat => {
+          superbowlMap.set(stat.playerId, stat);
+        });
+        statsByWeek.set(4, superbowlMap);
 
         setPlayerStatsByWeek(statsByWeek);
 
@@ -530,11 +537,12 @@ export function Analysis() {
     return getEliminatedTeamsForWeek(selectedStatsWeek);
   }, [selectedStatsWeek]);
 
-  // Get next round name
+  // Get next round name (empty after Super Bowl since season is over)
   const nextRoundLabel = useMemo(() => {
     if (selectedStatsWeek === 1) return 'Divisional';
     if (selectedStatsWeek === 2) return 'Championship';
-    return 'Super Bowl';
+    if (selectedStatsWeek === 3) return 'Super Bowl';
+    return ''; // Season over after SB
   }, [selectedStatsWeek]);
 
   // Calculate top scorers by position
@@ -752,17 +760,19 @@ export function Analysis() {
           ))}
         </div>
 
-        {/* Legend */}
-        <div className="flex gap-6 mb-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
-            <span className="text-gray-600">Still available for {nextRoundLabel}</span>
+        {/* Legend (hide after Super Bowl since season is over) */}
+        {nextRoundLabel && (
+          <div className="flex gap-6 mb-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+              <span className="text-gray-600">Still available for {nextRoundLabel}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">✗</div>
+              <span className="text-gray-600">Eliminated (team lost)</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">✗</div>
-            <span className="text-gray-600">Eliminated (team lost)</span>
-          </div>
-        </div>
+        )}
 
         {/* Single Chart */}
         <TopScorersChart
