@@ -169,11 +169,13 @@ export function useMultiWeekStandings(
   _getPlayerById?: (id: string) => Player | undefined // Deprecated, now loads players internally
 ): {
   standings: MultiWeekStanding[];
+  paidUserCount: number;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
 } {
   const [standings, setStandings] = useState<MultiWeekStanding[]>([]);
+  const [paidUserCount, setPaidUserCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -191,6 +193,9 @@ export function useMultiWeekStandings(
       // Create player map for lookups
       const playerMap = new Map<string, Player>();
       allPlayers.forEach(p => playerMap.set(p.id, p));
+
+      // Count paid users for payout calculation
+      setPaidUserCount(users.filter(u => u.hasPaid).length);
 
       // Initialize standings for each user
       const userStandings = new Map<string, MultiWeekStanding>();
@@ -266,6 +271,7 @@ export function useMultiWeekStandings(
 
   return {
     standings,
+    paidUserCount,
     loading,
     error,
     refresh: loadAllData,

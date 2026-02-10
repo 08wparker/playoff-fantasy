@@ -10,6 +10,7 @@ type TabType = 'overall' | PlayoffWeekName;
 
 interface ScoreboardProps {
   standings: MultiWeekStanding[];
+  paidUserCount: number;
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
@@ -30,6 +31,7 @@ interface WeekRosterScore {
 
 export function Scoreboard({
   standings,
+  paidUserCount,
   loading,
   error,
   onRefresh,
@@ -213,7 +215,7 @@ export function Scoreboard({
 
       {/* Overall Standings Table */}
       {!isLoading && activeTab === 'overall' && (
-        <OverallStandings standings={standings} onRefresh={onRefresh} />
+        <OverallStandings standings={standings} paidUserCount={paidUserCount} onRefresh={onRefresh} />
       )}
 
       {/* Week-specific Standings */}
@@ -231,12 +233,58 @@ export function Scoreboard({
   );
 }
 
+// Payout calculation constants
+const BUY_IN = 50;
+const WEEKLY_HIGH_SCORE_PAYOUT = 50; // Rounded up to $50
+
+function calculatePayouts(paidUserCount: number, standings: MultiWeekStanding[]) {
+  const totalPot = paidUserCount * BUY_IN;
+  const totalWeeklyPayouts = WEEKLY_HIGH_SCORE_PAYOUT * WEEKS.length;
+  const remainingPot = totalPot - totalWeeklyPayouts;
+
+  // Proportional split of remaining: 50/20/10 = 80 total parts
+  const first = Math.round(remainingPot * 50 / 80);
+  const second = Math.round(remainingPot * 20 / 80);
+  const third = remainingPot - first - second; // Use remainder to avoid rounding issues
+
+  // Find weekly high scorers
+  const weeklyWinners: { week: PlayoffWeekName; winner: MultiWeekStanding | null; points: number }[] =
+    WEEKS.map(week => {
+      let best: MultiWeekStanding | null = null;
+      let bestPts = 0;
+      for (const s of standings) {
+        if (s.weeklyPoints[week] > bestPts) {
+          bestPts = s.weeklyPoints[week];
+          best = s;
+        }
+      }
+      return { week, winner: best, points: bestPts };
+    });
+
+  // Build per-user winnings map
+  const userWinnings = new Map<string, number>();
+  // Place prizes
+  if (standings[0]) userWinnings.set(standings[0].user.uid, (userWinnings.get(standings[0].user.uid) || 0) + first);
+  if (standings[1]) userWinnings.set(standings[1].user.uid, (userWinnings.get(standings[1].user.uid) || 0) + second);
+  if (standings[2]) userWinnings.set(standings[2].user.uid, (userWinnings.get(standings[2].user.uid) || 0) + third);
+  // Weekly high score prizes
+  for (const { winner } of weeklyWinners) {
+    if (winner && winner.weeklyPoints) {
+      userWinnings.set(winner.user.uid, (userWinnings.get(winner.user.uid) || 0) + WEEKLY_HIGH_SCORE_PAYOUT);
+    }
+  }
+
+  return { totalPot, first, second, third, weeklyWinners, userWinnings };
+}
+
 // Overall standings table component
 function OverallStandings({
   standings,
+  paidUserCount,
   onRefresh,
 }: {
   standings: MultiWeekStanding[];
+  paidUserCount: number;
   onRefresh: () => Promise<void>;
 }) {
   if (standings.length === 0) {
@@ -249,6 +297,8 @@ function OverallStandings({
       </div>
     );
   }
+
+  const payouts = calculatePayouts(paidUserCount, standings);
 
   return (
     <div className="space-y-4">
@@ -265,6 +315,58 @@ function OverallStandings({
         </button>
       </div>
 
+      {/* Payouts Section */}
+      {paidUserCount > 0 && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
+          <h3 className="font-semibold text-green-800 mb-3">
+            Payouts ({paidUserCount} teams &times; ${BUY_IN} = ${payouts.totalPot} pot)
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Overall Place Prizes */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">Overall Finish</p>
+              {[
+                { place: '1st', amount: payouts.first, winner: standings[0], color: 'yellow' },
+                { place: '2nd', amount: payouts.second, winner: standings[1], color: 'gray' },
+                { place: '3rd', amount: payouts.third, winner: standings[2], color: 'orange' },
+              ].map(({ place, amount, winner, color }) => (
+                <div key={place} className="flex items-center justify-between bg-white/70 rounded px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                      color === 'gray' ? 'bg-gray-200 text-gray-600' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>{place.charAt(0)}</span>
+                    <span className="text-sm text-gray-700">
+                      {winner ? (winner.user.displayName || 'Anonymous') : 'TBD'}
+                    </span>
+                  </div>
+                  <span className="font-bold text-green-700">${amount}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Weekly High Score Prizes */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">Weekly High Score</p>
+              {payouts.weeklyWinners.map(({ week, winner, points }) => (
+                <div key={week} className="flex items-center justify-between bg-white/70 rounded px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-medium text-gray-500 w-12 shrink-0">{PLAYOFF_WEEK_DISPLAY_NAMES[week].slice(0, 4)}</span>
+                    <span className="text-sm text-gray-700 truncate">
+                      {winner && points > 0
+                        ? `${winner.user.displayName || 'Anonymous'} (${formatPoints(points)})`
+                        : 'TBD'}
+                    </span>
+                  </div>
+                  <span className="font-bold text-green-700 shrink-0">${WEEKLY_HIGH_SCORE_PAYOUT}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -278,6 +380,7 @@ function OverallStandings({
                   </th>
                 ))}
                 <th className="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase bg-primary-50">Total</th>
+                <th className="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase bg-green-50">Winnings</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -313,6 +416,15 @@ function OverallStandings({
                   ))}
                   <td className="py-3 px-4 text-center bg-primary-50">
                     <span className="font-bold text-lg text-primary-700">{formatPoints(entry.totalPoints)}</span>
+                  </td>
+                  <td className="py-3 px-4 text-center bg-green-50">
+                    {!entry.user.hasPaid ? (
+                      <span className="text-sm text-gray-400">N/A</span>
+                    ) : (payouts.userWinnings.get(entry.user.uid) || 0) > 0 ? (
+                      <span className="font-bold text-green-700">${payouts.userWinnings.get(entry.user.uid)}</span>
+                    ) : (
+                      <span className="text-sm text-gray-400">$0</span>
+                    )}
                   </td>
                 </tr>
               ))}

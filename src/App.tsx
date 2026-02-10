@@ -61,6 +61,7 @@ function AppContent() {
   // Load scoreboard (multi-week standings)
   const {
     standings,
+    paidUserCount,
     loading: scoresLoading,
     error: scoresError,
     refresh: refreshScores,
@@ -93,6 +94,7 @@ function AppContent() {
       ) : activeTab === 'scores' ? (
         <Scoreboard
           standings={standings}
+          paidUserCount={paidUserCount}
           loading={scoresLoading}
           error={scoresError}
           onRefresh={refreshScores}

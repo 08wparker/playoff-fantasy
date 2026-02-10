@@ -56,6 +56,18 @@ Scoring rules stored in Firebase (`config/scoringRules`) and can be modified via
 - **Extra Points**: 1 pt made, -1 pt missed
 - **Defense**: Points based on points allowed (shutout=10, scales down), plus sacks, INTs, fumble recoveries, defensive TDs
 
+### Payout Structure
+- **Buy-in**: $50 per team (tracked via `user.hasPaid` flag in Firebase)
+- **Weekly High Score**: $50 per week (5% of pot rounded up to $50), awarded to the highest scorer each playoff week (4 weeks = $200 total)
+- **Overall Finish**: Remaining pot after weekly payouts, split proportionally:
+  - 1st Place: 50/80 of remaining (~62.5%)
+  - 2nd Place: 20/80 of remaining (~25%)
+  - 3rd Place: 10/80 of remaining (~12.5%)
+- Users can win multiple prizes (e.g., 1st place overall + weekly high score)
+- Displayed as a "Winnings" column on the Overall standings tab
+- Unpaid users show "N/A", paid users with no winnings show "$0"
+- Implementation in `src/components/scoring/Scoreboard.tsx` (`calculatePayouts` function)
+
 ### Firebase Collections
 - `players/` - Player cache with ESPN headshots (keyed by generated ID)
 - `playoffConfig/{weekName}` - Teams participating each playoff week
